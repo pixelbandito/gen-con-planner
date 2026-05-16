@@ -19,6 +19,7 @@ interface Props {
   onExport: () => void;
   onImport: (file: File) => void;
   onClear: () => void;
+  onCollapse: () => void;
 }
 
 const STATUS_LABEL: Record<ScheduleStatus, string> = {
@@ -47,6 +48,7 @@ export function WishlistPanel({
   onExport,
   onImport,
   onClear,
+  onCollapse,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const dragIndexRef = useRef<number | null>(null);
@@ -88,6 +90,14 @@ export function WishlistPanel({
   return (
     <section className="pane pane-wishlist">
       <div className="pane-head">
+        <button
+          className="btn btn-mini pane-collapse"
+          onClick={onCollapse}
+          title="Collapse wishlist pane"
+          aria-label="Collapse wishlist pane"
+        >
+          »
+        </button>
         <h2>Wishlist</h2>
         <span className="count">
           {entries.length} / {WISHLIST_CAP} · {fmtCost(totalCost)} expected

@@ -17,6 +17,7 @@ interface Props {
   onSelect: (id: number) => void;
   onMatchIds: (ids: Set<number>) => void;
   onClearSlotSearch: () => void;
+  onCollapse: () => void;
 }
 
 const RESULT_CAP = 300;
@@ -51,6 +52,7 @@ export function EventBrowser({
   onSelect,
   onMatchIds,
   onClearSlotSearch,
+  onCollapse,
 }: Props) {
   const [text, setText] = useState('');
   const [gameSystem, setGameSystem] = useState('');
@@ -203,6 +205,14 @@ export function EventBrowser({
         <span className="count">
           {filtered.length} match{filtered.length === 1 ? '' : 'es'}
         </span>
+        <button
+          className="btn btn-mini pane-collapse"
+          onClick={onCollapse}
+          title="Collapse search pane"
+          aria-label="Collapse search pane"
+        >
+          «
+        </button>
       </div>
 
       <div className="filters">

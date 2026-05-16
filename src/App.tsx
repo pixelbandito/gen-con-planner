@@ -17,6 +17,7 @@ import {
 import { EventBrowser } from './components/EventBrowser';
 import { AgendaView } from './components/AgendaView';
 import { WishlistPanel } from './components/WishlistPanel';
+import { CollapsedRail } from './components/CollapsedRail';
 import { EventModal } from './components/EventModal';
 
 const WISHLIST_CAP = 300;
@@ -168,14 +169,6 @@ export default function App() {
         alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`));
   }
 
-  // Cross-pane state lifted now, consumed by Search/Wishlist in later units
-  // (collapsible panes in Unit 6). Referenced here so the lifted-but-not-yet-
-  // wired bindings stay live under noUnusedLocals.
-  void [
-    searchCollapsed,
-    wishlistCollapsed, setWishlistCollapsed,
-  ];
-
   const scheduledCount = layers[0]?.scheduledIds.length ?? 0;
   const bumpedCount = wishlist.entries.filter(
     (e) => fullResult.get(e.eventId)?.status === 'bumped',
@@ -217,19 +210,28 @@ export default function App() {
 
       {dataset && (
         <main className="panes">
-          <EventBrowser
-            events={dataset.events}
-            rankById={rankById}
-            wishlistIds={wishlistIds}
-            gameSystems={dataset.gameSystems}
-            scrapedAt={dataset.scrapedAt}
-            slotSearch={slotSearch}
-            onAdd={addToWishlist}
-            onRemove={removeFromWishlist}
-            onSelect={setSelectedId}
-            onMatchIds={setActiveMatchIds}
-            onClearSlotSearch={() => setSlotSearch(null)}
-          />
+          {searchCollapsed ? (
+            <CollapsedRail
+              label="Search"
+              side="left"
+              onExpand={() => setSearchCollapsed(false)}
+            />
+          ) : (
+            <EventBrowser
+              events={dataset.events}
+              rankById={rankById}
+              wishlistIds={wishlistIds}
+              gameSystems={dataset.gameSystems}
+              scrapedAt={dataset.scrapedAt}
+              slotSearch={slotSearch}
+              onAdd={addToWishlist}
+              onRemove={removeFromWishlist}
+              onSelect={setSelectedId}
+              onMatchIds={setActiveMatchIds}
+              onClearSlotSearch={() => setSlotSearch(null)}
+              onCollapse={() => setSearchCollapsed(true)}
+            />
+          )}
           <AgendaView
             entries={wishlist.entries}
             eventsById={eventsById}
@@ -245,22 +247,31 @@ export default function App() {
             onUncollapseSearch={() => setSearchCollapsed(false)}
             onToggleHidden={toggleHidden}
           />
-          <WishlistPanel
-            wishlist={wishlist}
-            eventsById={eventsById}
-            fullResult={fullResult}
-            rankById={rankById}
-            hedges={hedges}
-            activeMatchIds={activeMatchIds}
-            onMove={moveEntry}
-            onReorder={reorderEntry}
-            onRemove={removeFromWishlist}
-            onNote={setNote}
-            onSelect={setSelectedId}
-            onExport={() => exportWishlist(wishlist)}
-            onImport={handleImport}
-            onClear={clearWishlist}
-          />
+          {wishlistCollapsed ? (
+            <CollapsedRail
+              label="Wishlist"
+              side="right"
+              onExpand={() => setWishlistCollapsed(false)}
+            />
+          ) : (
+            <WishlistPanel
+              wishlist={wishlist}
+              eventsById={eventsById}
+              fullResult={fullResult}
+              rankById={rankById}
+              hedges={hedges}
+              activeMatchIds={activeMatchIds}
+              onMove={moveEntry}
+              onReorder={reorderEntry}
+              onRemove={removeFromWishlist}
+              onNote={setNote}
+              onSelect={setSelectedId}
+              onExport={() => exportWishlist(wishlist)}
+              onImport={handleImport}
+              onClear={clearWishlist}
+              onCollapse={() => setWishlistCollapsed(true)}
+            />
+          )}
         </main>
       )}
 
