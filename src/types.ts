@@ -45,3 +45,14 @@ export interface Wishlist {
   version: number;
   entries: WishlistEntry[];
 }
+
+/** A pending slot-search request raised by clicking the agenda grid. */
+export type SlotSearch =
+  | { kind: 'overlap'; ts: number }
+  | { kind: 'contained'; start: number; end: number }
+  | null;
+
+/** Which slice of the wishlist the agenda renders. */
+export type PriorityFilter =
+  | { mode: 'layer'; layer: number }
+  | { mode: 'range'; a: number; b: number };

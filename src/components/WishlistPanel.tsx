@@ -1,13 +1,14 @@
 import { useMemo, useRef } from 'react';
 import type { GenConEvent, Wishlist } from '../types';
-import type { ScheduleInfo, ScheduleStatus } from '../lib/schedule';
+import type { GreedyResult, ScheduleStatus } from '../lib/schedule';
 import { fmtDateTime } from '../lib/time';
 import { fmtCost, gameClass } from '../lib/style';
 
 interface Props {
   wishlist: Wishlist;
   eventsById: Map<number, GenConEvent>;
-  schedule: Map<number, ScheduleInfo>;
+  fullResult: Map<number, GreedyResult>;
+  rankById: Map<number, number>;
   hedges: Map<string, number[]>;
   onMove: (id: number, dir: -1 | 1) => void;
   onRemove: (id: number) => void;
@@ -28,7 +29,8 @@ const STATUS_LABEL: Record<ScheduleStatus, string> = {
 export function WishlistPanel({
   wishlist,
   eventsById,
-  schedule,
+  fullResult,
+  rankById,
   hedges,
   onMove,
   onRemove,
@@ -51,12 +53,12 @@ export function WishlistPanel({
   const totalCost = useMemo(() => {
     let sum = 0;
     for (const entry of wishlist.entries) {
-      const info = schedule.get(entry.eventId);
+      const info = fullResult.get(entry.eventId);
       const ev = eventsById.get(entry.eventId);
       if (ev && info?.status === 'scheduled' && ev.cost) sum += ev.cost;
     }
     return sum;
-  }, [wishlist, schedule, eventsById]);
+  }, [wishlist, fullResult, eventsById]);
 
   const { entries } = wishlist;
 
@@ -99,12 +101,12 @@ export function WishlistPanel({
       <ol className="wishlist">
         {entries.map((entry, i) => {
           const ev = eventsById.get(entry.eventId);
-          const info = schedule.get(entry.eventId);
+          const info = fullResult.get(entry.eventId);
           const status = info?.status ?? 'missing';
           const hedge = hedgeCount.get(entry.eventId);
           const bumpedByRank =
             info?.bumpedBy != null
-              ? schedule.get(info.bumpedBy)?.rank
+              ? rankById.get(info.bumpedBy)
               : undefined;
           return (
             <li

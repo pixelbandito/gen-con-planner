@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { GenConEvent } from '../types';
-import type { ScheduleInfo } from '../lib/schedule';
 import { fmtDateTime, fmtDayLabel, parseWall } from '../lib/time';
 import { fmtCost, gameClass } from '../lib/style';
 
 interface Props {
   events: GenConEvent[];
-  schedule: Map<number, ScheduleInfo>;
+  rankById: Map<number, number>;
   wishlistIds: Set<number>;
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
@@ -17,7 +16,7 @@ const RESULT_CAP = 300;
 
 export function EventBrowser({
   events,
-  schedule,
+  rankById,
   wishlistIds,
   onAdd,
   onRemove,
@@ -148,13 +147,14 @@ export function EventBrowser({
 
       <div className="event-list">
         {shown.map((e) => {
-          const info = schedule.get(e.id);
           const inList = wishlistIds.has(e.id);
           return (
             <div key={e.id} className={`event-row ${gameClass(e.gameSystem)}`}>
               <div className="event-row-main" onClick={() => onSelect(e.id)}>
                 <div className="event-row-title">
-                  {inList && <span className="rank-chip">#{info?.rank}</span>}
+                  {inList && (
+                    <span className="rank-chip">#{rankById.get(e.id)}</span>
+                  )}
                   {e.title}
                 </div>
                 <div className="event-row-meta">

@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { EventsDataset, GenConEvent, Wishlist } from './types';
-import { computeSchedule, hedgeGroups } from './lib/schedule';
+import type {
+  EventsDataset,
+  GenConEvent,
+  PriorityFilter,
+  SlotSearch,
+  Wishlist,
+} from './types';
+import type { GreedyResult } from './lib/schedule';
+import { computeLayers, hedgeGroups } from './lib/schedule';
 import {
   exportWishlist,
   loadWishlist,
@@ -8,15 +15,28 @@ import {
   saveWishlist,
 } from './lib/storage';
 import { EventBrowser } from './components/EventBrowser';
-import { CalendarView } from './components/CalendarView';
+import { AgendaView } from './components/AgendaView';
 import { WishlistPanel } from './components/WishlistPanel';
 import { EventModal } from './components/EventModal';
+
+const WISHLIST_CAP = 300;
 
 export default function App() {
   const [dataset, setDataset] = useState<EventsDataset | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [wishlist, setWishlist] = useState<Wishlist>(() => loadWishlist());
   const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  // Cross-pane state. Session-only — none of this is persisted.
+  const [hiddenIds, setHiddenIds] = useState(() => new Set<number>());
+  const [slotSearch, setSlotSearch] = useState<SlotSearch>(null);
+  const [activeMatchIds, setActiveMatchIds] = useState(() => new Set<number>());
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>({
+    mode: 'layer',
+    layer: 1,
+  });
+  const [searchCollapsed, setSearchCollapsed] = useState(false);
+  const [wishlistCollapsed, setWishlistCollapsed] = useState(false);
 
   // Load the static, read-only event dataset.
   useEffect(() => {
@@ -41,10 +61,20 @@ export default function App() {
     return m;
   }, [dataset]);
 
-  const schedule = useMemo(
-    () => computeSchedule(wishlist.entries, eventsById),
-    [wishlist, eventsById],
+  const layers = useMemo(
+    () => computeLayers(wishlist.entries, eventsById, hiddenIds),
+    [wishlist, eventsById, hiddenIds],
   );
+  // Layer 1 is the greedy fill of the whole wishlist: the full status map.
+  const fullResult = useMemo(
+    () => layers[0]?.result ?? new Map<number, GreedyResult>(),
+    [layers],
+  );
+  const rankById = useMemo(() => {
+    const m = new Map<number, number>();
+    wishlist.entries.forEach((e, i) => m.set(e.eventId, i + 1));
+    return m;
+  }, [wishlist]);
   const hedges = useMemo(
     () => hedgeGroups(wishlist.entries, eventsById),
     [wishlist, eventsById],
@@ -55,6 +85,10 @@ export default function App() {
   );
 
   function addToWishlist(id: number) {
+    if (wishlist.entries.length >= WISHLIST_CAP) {
+      alert('Wishlist is capped at 300 events.');
+      return;
+    }
     setWishlist((w) =>
       w.entries.some((e) => e.eventId === id)
         ? w
@@ -94,6 +128,19 @@ export default function App() {
     }
   }
 
+  function toggleHidden(id: number) {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearHidden() {
+    setHiddenIds(new Set());
+  }
+
   function handleImport(file: File) {
     file
       .text()
@@ -102,11 +149,20 @@ export default function App() {
         alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`));
   }
 
-  const scheduledCount = [...schedule.values()].filter(
-    (s) => s.status === 'scheduled',
-  ).length;
-  const bumpedCount = [...schedule.values()].filter(
-    (s) => s.status === 'bumped',
+  // Cross-pane state lifted now, consumed by Search/Agenda/Wishlist in later
+  // units (slot-search, match highlight, collapsible panes). Referenced here
+  // so the lifted-but-not-yet-wired bindings stay live under noUnusedLocals.
+  void [
+    slotSearch, setSlotSearch,
+    activeMatchIds, setActiveMatchIds,
+    searchCollapsed, setSearchCollapsed,
+    wishlistCollapsed, setWishlistCollapsed,
+    toggleHidden,
+  ];
+
+  const scheduledCount = layers[0]?.scheduledIds.length ?? 0;
+  const bumpedCount = wishlist.entries.filter(
+    (e) => fullResult.get(e.eventId)?.status === 'bumped',
   ).length;
 
   return (
@@ -147,22 +203,28 @@ export default function App() {
         <main className="panes">
           <EventBrowser
             events={dataset.events}
-            schedule={schedule}
+            rankById={rankById}
             wishlistIds={wishlistIds}
             onAdd={addToWishlist}
             onRemove={removeFromWishlist}
             onSelect={setSelectedId}
           />
-          <CalendarView
+          <AgendaView
             entries={wishlist.entries}
             eventsById={eventsById}
-            schedule={schedule}
+            layers={layers}
+            hiddenIds={hiddenIds}
+            rankById={rankById}
+            priorityFilter={priorityFilter}
+            onPriorityFilter={setPriorityFilter}
+            onClearHidden={clearHidden}
             onSelect={setSelectedId}
           />
           <WishlistPanel
             wishlist={wishlist}
             eventsById={eventsById}
-            schedule={schedule}
+            fullResult={fullResult}
+            rankById={rankById}
             hedges={hedges}
             onMove={moveEntry}
             onRemove={removeFromWishlist}
@@ -178,7 +240,8 @@ export default function App() {
       {selectedId != null && eventsById.get(selectedId) && (
         <EventModal
           event={eventsById.get(selectedId)!}
-          info={schedule.get(selectedId)}
+          rank={rankById.get(selectedId)}
+          status={fullResult.get(selectedId)?.status}
           inWishlist={wishlistIds.has(selectedId)}
           onAdd={addToWishlist}
           onRemove={removeFromWishlist}

@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
 import type { GenConEvent } from '../types';
-import type { ScheduleInfo } from '../lib/schedule';
+import type { ScheduleStatus } from '../lib/schedule';
 import { fmtDateTime } from '../lib/time';
 import { fmtCost, gameClass } from '../lib/style';
 
 interface Props {
   event: GenConEvent;
-  info?: ScheduleInfo;
+  rank?: number;
+  status?: ScheduleStatus;
   inWishlist: boolean;
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
@@ -15,7 +16,8 @@ interface Props {
 
 export function EventModal({
   event,
-  info,
+  rank,
+  status,
   inWishlist,
   onAdd,
   onRemove,
@@ -64,9 +66,9 @@ export function EventModal({
           <button className="btn btn-mini" onClick={onClose}>✕</button>
         </div>
 
-        {info && (
-          <div className={`modal-status status-${info.status}`}>
-            Wishlist rank #{info.rank} · {info.status}
+        {rank != null && (
+          <div className={`modal-status status-${status}`}>
+            Wishlist rank #{rank} · {status}
           </div>
         )}
 

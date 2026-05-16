@@ -81,7 +81,7 @@ code {
   border-right: 1px solid var(--line);
 }
 .pane-browser { width: 360px; flex: none; }
-.pane-calendar { flex: 1; min-width: 0; }
+.pane-agenda { flex: 1; min-width: 0; }
 .pane-wishlist { width: 380px; flex: none; border-right: none; }
 
 .pane-head {
@@ -182,7 +182,64 @@ code {
 .btn-danger { color: var(--danger); }
 .btn-mini { padding: 2px 6px; font-size: 11px; }
 
-/* ---- calendar ---- */
+/* ---- agenda ---- */
+.priority-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.priority-modes,
+.priority-segments {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.priority-modes { flex: none; }
+.priority-segments { flex: 1; min-width: 0; }
+.priority-bar .btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.priority-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.range-field {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.range-field input {
+  width: 58px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+.range-dash { color: var(--ink-soft); }
+.hidden-chip {
+  margin-left: auto;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #eef0f4;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.hidden-chip:hover { background: #e2e5ec; }
+
 .cal-legend {
   display: flex;
   gap: 14px;
@@ -200,11 +257,6 @@ code {
   display: inline-block;
 }
 .legend-scheduled::before { background: var(--accent); }
-.legend-bumped::before {
-  background: var(--accent);
-  opacity: 0.4;
-  border: 1px dashed var(--accent);
-}
 
 .cal-empty, .cal-footnote {
   padding: 16px;
@@ -273,10 +325,6 @@ code {
 .cal-event:hover { z-index: 3; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
 .cal-event.is-scheduled {
   background: color-mix(in srgb, var(--sys-color) 26%, #fff);
-}
-.cal-event.is-bumped {
-  border-style: dashed;
-  opacity: 0.6;
 }
 .cal-event-rank {
   font-weight: 700;

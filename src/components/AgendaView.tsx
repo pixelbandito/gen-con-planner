@@ -1,22 +1,29 @@
-import { useMemo, useState } from 'react';
-import type { GenConEvent, WishlistEntry } from '../types';
-import type { ScheduleInfo } from '../lib/schedule';
+import { useMemo } from 'react';
+import type { GenConEvent, PriorityFilter, WishlistEntry } from '../types';
+import type { Layer } from '../lib/schedule';
+import { rangeItems } from '../lib/schedule';
 import { fmtDayLabel, fmtHour, fmtTime, parseWall } from '../lib/time';
 import { gameClass } from '../lib/style';
 
 interface Props {
   entries: WishlistEntry[];
   eventsById: Map<number, GenConEvent>;
-  schedule: Map<number, ScheduleInfo>;
+  layers: Layer[];
+  hiddenIds: Set<number>;
+  rankById: Map<number, number>;
+  priorityFilter: PriorityFilter;
+  onPriorityFilter: (f: PriorityFilter) => void;
+  onClearHidden: () => void;
   onSelect: (id: number) => void;
 }
 
 const PX_PER_MIN = 1;
 const MIN_BLOCK_PX = 26;
+const MAX_RANK = 300;
 
 interface Placed {
   event: GenConEvent;
-  info: ScheduleInfo;
+  rank: number;
   dayKey: string;
   startMin: number;
   endMin: number;
@@ -57,22 +64,36 @@ function packDay(items: Placed[]): void {
   flush();
 }
 
-export function CalendarView({
+const clampRank = (n: number) =>
+  Number.isNaN(n) ? 1 : Math.min(MAX_RANK, Math.max(1, Math.round(n)));
+
+export function AgendaView({
   entries,
   eventsById,
-  schedule,
+  layers,
+  hiddenIds,
+  rankById,
+  priorityFilter,
+  onPriorityFilter,
+  onClearHidden,
   onSelect,
 }: Props) {
-  const [showBumped, setShowBumped] = useState(true);
-
   const { byDay, days, minHour, maxHour, untimed } = useMemo(() => {
+    // The ranked event ids the agenda should draw for the active filter.
+    const drawn: { eventId: number; rank: number }[] =
+      priorityFilter.mode === 'layer'
+        ? (layers[priorityFilter.layer - 1]?.scheduledIds ?? []).map((id) => ({
+            eventId: id,
+            rank: rankById.get(id) ?? 0,
+          }))
+        : rangeItems(entries, hiddenIds, priorityFilter.a, priorityFilter.b);
+
     const all: Placed[] = [];
     let untimedCount = 0;
 
-    for (const entry of entries) {
-      const ev = eventsById.get(entry.eventId);
-      const info = schedule.get(entry.eventId);
-      if (!ev || !info) continue;
+    for (const it of drawn) {
+      const ev = eventsById.get(it.eventId);
+      if (!ev) continue;
       const s = parseWall(ev.start);
       const e = parseWall(ev.end);
       if (!s || !e) {
@@ -82,7 +103,7 @@ export function CalendarView({
       const durMin = Math.max((e.ts - s.ts) / 60000, 30);
       all.push({
         event: ev,
-        info,
+        rank: it.rank,
         dayKey: s.dayKey,
         startMin: s.minOfDay,
         endMin: s.minOfDay + durMin,
@@ -92,12 +113,8 @@ export function CalendarView({
       });
     }
 
-    const visible = showBumped
-      ? all
-      : all.filter((p) => p.info.status !== 'bumped');
-
     const grouped = new Map<string, Placed[]>();
-    for (const p of visible) {
+    for (const p of all) {
       const list = grouped.get(p.dayKey) ?? [];
       list.push(p);
       grouped.set(p.dayKey, list);
@@ -106,12 +123,12 @@ export function CalendarView({
 
     let lo = 24 * 60;
     let hi = 0;
-    for (const p of visible) {
+    for (const p of all) {
       lo = Math.min(lo, p.startMin);
       hi = Math.max(hi, p.endMin);
     }
-    const minH = visible.length ? Math.floor(lo / 60) : 9;
-    const maxH = visible.length ? Math.ceil(hi / 60) : 23;
+    const minH = all.length ? Math.floor(lo / 60) : 9;
+    const maxH = all.length ? Math.ceil(hi / 60) : 23;
 
     return {
       byDay: grouped,
@@ -120,38 +137,116 @@ export function CalendarView({
       maxHour: maxH,
       untimed: untimedCount,
     };
-  }, [entries, eventsById, schedule, showBumped]);
+  }, [entries, eventsById, layers, hiddenIds, rankById, priorityFilter]);
 
   const bodyHeight = (maxHour - minHour) * 60 * PX_PER_MIN;
   const hours: number[] = [];
   for (let h = minHour; h <= maxHour; h += 1) hours.push(h);
 
+  const rangeA = priorityFilter.mode === 'range' ? priorityFilter.a : 1;
+  const rangeB = priorityFilter.mode === 'range' ? priorityFilter.b : 50;
+
   return (
-    <section className="pane pane-calendar">
+    <section className="pane pane-agenda">
       <div className="pane-head">
-        <h2>Calendar</h2>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={showBumped}
-            onChange={(e) => setShowBumped(e.target.checked)}
-          />
-          Show bumped layer
-        </label>
+        <h2>Agenda</h2>
+      </div>
+
+      <div className="priority-bar">
+        <div className="priority-modes">
+          <button
+            className={`btn btn-mini ${
+              priorityFilter.mode === 'layer' ? 'is-active' : ''
+            }`}
+            onClick={() => onPriorityFilter({ mode: 'layer', layer: 1 })}
+          >
+            Layers
+          </button>
+          <button
+            className={`btn btn-mini ${
+              priorityFilter.mode === 'range' ? 'is-active' : ''
+            }`}
+            onClick={() =>
+              onPriorityFilter({ mode: 'range', a: rangeA, b: rangeB })
+            }
+          >
+            Range
+          </button>
+        </div>
+
+        {priorityFilter.mode === 'layer' ? (
+          <div className="priority-segments">
+            {layers.map((layer) => (
+              <button
+                key={layer.index}
+                className={`btn btn-mini ${
+                  priorityFilter.layer === layer.index ? 'is-active' : ''
+                }`}
+                onClick={() =>
+                  onPriorityFilter({ mode: 'layer', layer: layer.index })
+                }
+              >
+                {layer.index === 1
+                  ? `L${layer.index} · Top choices`
+                  : `L${layer.index} · from #${layer.startRank}`}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="priority-range">
+            <label className="range-field">
+              #
+              <input
+                type="number"
+                min={1}
+                max={MAX_RANK}
+                value={rangeA}
+                onChange={(e) => {
+                  const a = clampRank(Number(e.target.value));
+                  onPriorityFilter({
+                    mode: 'range',
+                    a,
+                    b: Math.max(a, rangeB),
+                  });
+                }}
+              />
+            </label>
+            <span className="range-dash">–</span>
+            <label className="range-field">
+              #
+              <input
+                type="number"
+                min={1}
+                max={MAX_RANK}
+                value={rangeB}
+                onChange={(e) => {
+                  const b = clampRank(Number(e.target.value));
+                  onPriorityFilter({
+                    mode: 'range',
+                    a: Math.min(rangeA, b),
+                    b,
+                  });
+                }}
+              />
+            </label>
+          </div>
+        )}
+
+        {hiddenIds.size > 0 && (
+          <button className="hidden-chip" onClick={onClearHidden}>
+            Hidden ({hiddenIds.size}) · restore
+          </button>
+        )}
       </div>
 
       <div className="cal-legend">
-        <span className="legend-item legend-scheduled">Expected schedule</span>
-        <span className="legend-item legend-bumped">
-          Bumped (backup layer)
-        </span>
+        <span className="legend-item legend-scheduled">Wishlisted events</span>
       </div>
 
       {days.length === 0 ? (
         <div className="cal-empty">
-          Your wishlist is empty. Add events from the browser and they will
-          appear here — your expected schedule solid, conflict-bumped backups
-          translucent.
+          Nothing to show for this priority filter. Add events from the browser
+          or widen the layer / range selection.
         </div>
       ) : (
         <div className="cal-scroll">
@@ -195,7 +290,7 @@ export function CalendarView({
                         key={p.event.id}
                         className={`cal-event ${gameClass(
                           p.event.gameSystem,
-                        )} is-${p.info.status}`}
+                        )} is-scheduled`}
                         style={{
                           top,
                           height,
@@ -205,9 +300,7 @@ export function CalendarView({
                         onClick={() => onSelect(p.event.id)}
                         title={p.event.title}
                       >
-                        <span className="cal-event-rank">
-                          #{p.info.rank}
-                        </span>
+                        <span className="cal-event-rank">#{p.rank}</span>
                         <span className="cal-event-title">
                           {p.event.title}
                         </span>
