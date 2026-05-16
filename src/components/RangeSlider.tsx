@@ -29,10 +29,11 @@ export function RangeSlider({ min, max, low, high, onChange }: Props) {
   const loPct = ((lo - min) / span) * 100;
   const hiPct = ((hi - min) / span) * 100;
 
-  // Raise the low input above the high input whenever the low thumb would
-  // otherwise be unreachable: when the thumbs coincide, or the low thumb is
-  // pinned at (or right up against) the right edge of the track.
-  const lowOnTop = lo >= hi || lo >= max;
+  // When the two thumbs coincide they must be pulled apart by grabbing the
+  // top one. The top thumb needs somewhere to go: at the min edge the low
+  // thumb is pinned, so the HIGH thumb must be on top (it drags up); anywhere
+  // else (mid-track or the max edge) the LOW thumb is on top (it drags down).
+  const lowOnTop = lo >= hi && lo > min;
 
   return (
     <div className="range-slider">
