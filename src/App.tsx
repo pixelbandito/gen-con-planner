@@ -15,12 +15,15 @@ import {
   fetchCachedEvents,
   fetchCategories,
   fetchCollection,
+  fetchEventsByIds,
   fetchSystems,
 } from './lib/api';
 import {
   exportWishlist,
+  loadEventSnapshots,
   loadWishlist,
   parseImportedWishlist,
+  saveEventSnapshots,
   saveWishlist,
 } from './lib/storage';
 import { EventBrowser } from './components/EventBrowser';
@@ -52,6 +55,13 @@ export default function App() {
   const inFlightCollections = useRef(new Set<string>());
   const [wishlist, setWishlist] = useState<Wishlist>(() => loadWishlist());
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Durable metadata mirror for wishlisted events — survives a cleared proxy
+  // cache or a stopped dev server. Kept in sync by the effect below.
+  const [eventSnapshots, setEventSnapshots] = useState<Map<number, GenConEvent>>(
+    () => new Map(loadEventSnapshots().map((e) => [e.id, e])),
+  );
+  // True while the manual recover-missing-events fetch is in flight.
+  const [recovering, setRecovering] = useState(false);
 
   // Cross-pane state. Session-only — none of this is persisted.
   const [hiddenIds, setHiddenIds] = useState(() => new Set<number>());
@@ -167,23 +177,32 @@ export default function App() {
     }
   }
 
-  // Flattened, id-deduped event list derived from all loaded collections.
-  // An event can appear in both a game and a category collection — keep one.
-  const events = useMemo(() => {
+  // Id-deduped event map derived purely from loaded collections. An event can
+  // appear in both a game and a category collection — keep the first seen.
+  const collectionEventsById = useMemo(() => {
     const byId = new Map<number, GenConEvent>();
     for (const collection of collections.values()) {
       for (const e of collection.events) {
         if (!byId.has(e.id)) byId.set(e.id, e);
       }
     }
-    return [...byId.values()];
+    return byId;
   }, [collections]);
 
+  // The Search browser's list — collections only, so snapshot-only events
+  // (recovered wishlist metadata) never appear as browsable rows.
+  const events = useMemo(
+    () => [...collectionEventsById.values()],
+    [collectionEventsById],
+  );
+
+  // Resolution map for the Wishlist/Agenda/modal: collections win, then fall
+  // back to durable snapshots so wishlisted events resolve with the proxy off.
   const eventsById = useMemo(() => {
-    const m = new Map<number, GenConEvent>();
-    for (const e of events) m.set(e.id, e);
+    const m = new Map<number, GenConEvent>(eventSnapshots);
+    for (const [id, e] of collectionEventsById) m.set(id, e);
     return m;
-  }, [events]);
+  }, [collectionEventsById, eventSnapshots]);
 
   // Agenda layers honor hidden events — hiding is an Agenda-only view filter.
   const agendaLayers = useMemo(
@@ -225,6 +244,62 @@ export default function App() {
     () => new Set(wishlist.entries.map((e) => e.eventId)),
     [wishlist],
   );
+
+  // Keep durable snapshots in sync with the wishlist: snapshot every
+  // wishlisted event resolvable from collections (preferred) or an existing
+  // snapshot, and drop snapshots for events no longer wishlisted (bounded).
+  // The write is guarded so an unchanged result cannot trigger a render loop.
+  useEffect(() => {
+    const next = new Map<number, GenConEvent>();
+    for (const { eventId } of wishlist.entries) {
+      const resolved =
+        collectionEventsById.get(eventId) ?? eventSnapshots.get(eventId);
+      if (resolved) next.set(eventId, resolved);
+    }
+    const changed =
+      next.size !== eventSnapshots.size ||
+      [...next].some(([id, e]) => eventSnapshots.get(id) !== e);
+    if (changed) {
+      setEventSnapshots(next);
+      saveEventSnapshots([...next.values()]);
+    }
+  }, [wishlist, collectionEventsById, eventSnapshots]);
+
+  // Wishlisted event ids that resolve from neither collections nor snapshots —
+  // candidates for manual recovery.
+  const missingWishlistIds = useMemo(() => {
+    const missing = new Set<number>();
+    for (const { eventId } of wishlist.entries) {
+      if (!collectionEventsById.has(eventId) && !eventSnapshots.has(eventId)) {
+        missing.add(eventId);
+      }
+    }
+    return missing;
+  }, [wishlist, collectionEventsById, eventSnapshots]);
+
+  // Re-fetch missing wishlisted events by id and merge them into the durable
+  // snapshots (the snapshot-sync effect persists the result).
+  async function recoverMissingEvents() {
+    if (recovering || missingWishlistIds.size === 0) return;
+    setRecovering(true);
+    try {
+      const { events: recovered } = await fetchEventsByIds([
+        ...missingWishlistIds,
+      ]);
+      if (recovered.length > 0) {
+        setEventSnapshots((prev) => {
+          const next = new Map(prev);
+          for (const e of recovered) next.set(e.id, e);
+          return next;
+        });
+      }
+      setSystemError(null);
+    } catch (e: unknown) {
+      setSystemError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRecovering(false);
+    }
+  }
 
   function addToWishlist(id: number) {
     if (wishlist.entries.length >= WISHLIST_CAP) {
@@ -431,6 +506,9 @@ export default function App() {
               onImport={handleImport}
               onClear={clearWishlist}
               onCollapse={() => setWishlistCollapsed(true)}
+              missingCount={missingWishlistIds.size}
+              recovering={recovering}
+              onRecover={recoverMissingEvents}
             />
           )}
         </main>

@@ -3,7 +3,12 @@
 // The proxy matches requests on the absolute path prefix `/api/gencon/...`,
 // so these wrappers request absolute paths regardless of Vite's BASE_URL.
 
-import type { CatalogEntry, Collection, CollectionKind } from '../types';
+import type {
+  CatalogEntry,
+  Collection,
+  CollectionKind,
+  GenConEvent,
+} from '../types';
 
 /**
  * Stable key for a collection in the client's `collections` map / loading
@@ -44,6 +49,19 @@ export function fetchCollection(
   const params = new URLSearchParams({ [kind]: name });
   if (refresh) params.set('refresh', '1');
   return getJson<Collection>(`/api/gencon/events?${params.toString()}`);
+}
+
+/**
+ * GET /api/gencon/events-by-id?ids=... — re-fetch events by id, used to
+ * recover wishlisted events whose metadata is otherwise unavailable.
+ */
+export function fetchEventsByIds(
+  ids: number[],
+): Promise<{ events: GenConEvent[] }> {
+  if (ids.length === 0) return Promise.resolve({ events: [] });
+  return getJson<{ events: GenConEvent[] }>(
+    `/api/gencon/events-by-id?ids=${ids.join(',')}`,
+  );
 }
 
 /** GET /api/gencon/systems — the game-system catalog. */

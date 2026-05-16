@@ -674,6 +674,15 @@ code {
   gap: 6px;
   padding: 8px 14px 6px;
   flex: none;
+  flex-wrap: wrap;
+}
+/* recover-missing-events button: warning-toned, set apart from Save/Load/New */
+.btn-recover {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.btn-recover:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warn) 10%, #fff);
 }
 .wishlist-actions-note {
   margin: 0;

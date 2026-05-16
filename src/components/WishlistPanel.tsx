@@ -20,6 +20,11 @@ interface Props {
   onImport: (file: File) => void;
   onClear: () => void;
   onCollapse: () => void;
+  /** Count of wishlisted events whose metadata is currently unresolvable. */
+  missingCount: number;
+  /** True while a recovery fetch is in flight. */
+  recovering: boolean;
+  onRecover: () => void;
 }
 
 /** GenCon's real wishlist max; this app allows 300 for pre-planning. */
@@ -42,6 +47,9 @@ export function WishlistPanel({
   onImport,
   onClear,
   onCollapse,
+  missingCount,
+  recovering,
+  onRecover,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const dragIndexRef = useRef<number | null>(null);
@@ -119,6 +127,20 @@ export function WishlistPanel({
         >
           New
         </button>
+        {missingCount > 0 && (
+          <button
+            className="btn btn-recover"
+            onClick={onRecover}
+            disabled={recovering}
+            title="Re-fetch wishlisted events whose details are unavailable"
+          >
+            {recovering
+              ? 'Recovering…'
+              : `Recover ${missingCount} missing event${
+                  missingCount === 1 ? '' : 's'
+                }`}
+          </button>
+        )}
         <input
           ref={fileRef}
           type="file"

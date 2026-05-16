@@ -195,3 +195,32 @@ export function fetchCategoryEvents(category) {
 export function fetchSearchEvents(query) {
   return fetchAllEvents('search', query);
 }
+
+/**
+ * From event_search `records`, pick the one whose `_source.id` strictly equals
+ * the numeric `id` and return its `_source` — or `null` if no exact match.
+ * Pure helper so the exact-match logic is unit-testable.
+ */
+export function pickEventById(records, id) {
+  for (const r of records ?? []) {
+    if (r?._source && r._source.id === id) return r._source;
+  }
+  return null;
+}
+
+/**
+ * Fetch a single event by its numeric id via event_search, returning the
+ * normalized event or `null` if the API returns no exact-id match.
+ */
+export async function fetchEventById(id) {
+  const url = `${EVENT_SEARCH}?search=${encodeURIComponent(id)}&ag[]=eo&ag[]=tn`;
+  const res = await fetch(url, {
+    headers: { accept: 'application/json' },
+  });
+  if (!res.ok) {
+    throw new Error(`GenCon event_search id ${id}: HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  const source = pickEventById(data.records ?? [], id);
+  return source ? normalizeEvent(source) : null;
+}

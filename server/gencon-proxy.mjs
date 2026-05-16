@@ -8,6 +8,7 @@
 //   GET /api/gencon/events?search=TEXT   - events for a free-text query
 //   GET /api/gencon/events               - all cached collections (seeds from
 //                                          seed/events.json if empty)
+//   GET /api/gencon/events-by-id?ids=1,2 - re-fetch events by id (no caching)
 // `?refresh=1` forces a live re-fetch. Cache lives under cache/ (gitignored).
 //
 // A "collection" is one cacheable fetch unit: { kind, name, fetchedAt, events }
@@ -22,6 +23,7 @@ import {
   cacheSlug,
   fetchCategories,
   fetchCategoryEvents,
+  fetchEventById,
   fetchEvents,
   fetchGameSystems,
   fetchSearchEvents,
@@ -229,6 +231,44 @@ async function handleAllEvents(res) {
   sendJson(res, 200, { collections });
 }
 
+/**
+ * Run `worker` over `items` with at most `limit` in flight at once — be gentle
+ * to GenCon when recovering several events. Results preserve input order.
+ */
+async function mapWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function runner() {
+    for (;;) {
+      const i = next;
+      next += 1;
+      if (i >= items.length) return;
+      results[i] = await worker(items[i]);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, runner),
+  );
+  return results;
+}
+
+/**
+ * GET /api/gencon/events-by-id?ids=1,2,3 — re-fetch events by id for client
+ * recovery. Does NOT write to the cache; the client persists results itself.
+ */
+async function handleEventsById(res, idsParam) {
+  const ids = (idsParam ?? '')
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  if (ids.length === 0) {
+    sendJson(res, 400, { error: 'ids query must list numeric event ids' });
+    return;
+  }
+  const fetched = await mapWithConcurrency(ids, 4, (id) => fetchEventById(id));
+  sendJson(res, 200, { events: fetched.filter((e) => e != null) });
+}
+
 /** Shared connect middleware for both the dev and preview servers. */
 async function middleware(req, res, next) {
   if (!req.url || !req.url.startsWith('/api/gencon/')) {
@@ -245,6 +285,10 @@ async function middleware(req, res, next) {
     }
     if (url.pathname === '/api/gencon/categories') {
       await handleCategories(res, refresh);
+      return;
+    }
+    if (url.pathname === '/api/gencon/events-by-id') {
+      await handleEventsById(res, url.searchParams.get('ids'));
       return;
     }
     if (url.pathname === '/api/gencon/events') {

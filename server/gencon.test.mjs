@@ -5,6 +5,7 @@ import {
   normalizeEvent,
   parseBuckets,
   parseSystemBuckets,
+  pickEventById,
   slugify,
 } from './gencon.mjs';
 
@@ -96,6 +97,21 @@ describe('parseBuckets', () => {
 
   it('returns [] when the aggregation is absent', () => {
     expect(parseBuckets({ filtered: {} }, 'event_type')).toEqual([]);
+  });
+});
+
+describe('pickEventById', () => {
+  const records = [
+    { _source: { id: 100, title: 'First' } },
+    { _source: { id: 200, title: 'Second' } },
+  ];
+
+  it('returns the source whose id matches exactly', () => {
+    expect(pickEventById(records, 200)).toEqual({ id: 200, title: 'Second' });
+  });
+
+  it('returns null when no record matches the id', () => {
+    expect(pickEventById(records, 999)).toBe(null);
   });
 });
 

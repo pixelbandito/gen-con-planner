@@ -1,8 +1,12 @@
 // Wishlist persistence: localStorage, plus JSON file export/import.
 
-import type { Wishlist, WishlistEntry } from '../types';
+import type { GenConEvent, Wishlist, WishlistEntry } from '../types';
 
 const KEY = 'gencon-planner-wishlist-v1';
+// Durable metadata mirror for wishlisted events, so the Wishlist/Agenda can
+// resolve them even when the proxy cache is cleared or the dev server is down.
+// Kept separate from the wishlist record and from its JSON export.
+const SNAPSHOTS_KEY = 'gencon-planner-event-snapshots-v1';
 
 function sanitizeEntries(raw: unknown): WishlistEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -54,6 +58,34 @@ export function exportWishlist(w: Wishlist): void {
   a.download = `gencon-wishlist-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Load the durable event-metadata snapshots; [] on missing/corrupt storage. */
+export function loadEventSnapshots(): GenConEvent[] {
+  try {
+    const raw = localStorage.getItem(SNAPSHOTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (e): e is GenConEvent =>
+            !!e && typeof (e as GenConEvent).id === 'number',
+        );
+      }
+    }
+  } catch {
+    // Corrupt storage — fall through to no snapshots.
+  }
+  return [];
+}
+
+/** Persist the durable event-metadata snapshots. */
+export function saveEventSnapshots(events: GenConEvent[]): void {
+  try {
+    localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(events));
+  } catch {
+    // Storage full or unavailable — nothing actionable to do.
+  }
 }
 
 export function parseImportedWishlist(text: string): Wishlist {
