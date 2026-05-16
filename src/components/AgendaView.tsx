@@ -465,6 +465,7 @@ export function AgendaView({
                     <button
                       className="btn btn-mini layer-current"
                       onClick={() => setLayerMenuOpen((o) => !o)}
+                      disabled={layers.length === 0}
                       aria-haspopup="listbox"
                       aria-expanded={layerMenuOpen}
                     >
