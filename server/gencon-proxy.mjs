@@ -6,7 +6,7 @@
 //   GET /api/gencon/events?game=NAME     - events for one game system
 //   GET /api/gencon/events?category=NAME - events for one event category
 //   GET /api/gencon/events               - all cached collections (seeds from
-//                                          public/data/events.json if empty)
+//                                          seed/events.json if empty)
 // `?refresh=1` forces a live re-fetch. Cache lives under cache/ (gitignored).
 //
 // A "collection" is one cacheable fetch unit: { kind, name, fetchedAt, events }
@@ -31,7 +31,7 @@ const CACHE_DIR = join(ROOT, 'cache');
 const EVENTS_CACHE_DIR = join(CACHE_DIR, 'events');
 const SYSTEMS_CACHE = join(CACHE_DIR, 'systems.json');
 const CATEGORIES_CACHE = join(CACHE_DIR, 'categories.json');
-const SEED_PATH = join(ROOT, 'public', 'data', 'events.json');
+const SEED_PATH = join(ROOT, 'seed', 'events.json');
 
 // In-flight collection fetches, keyed by `${kind}-${slug}` — collapses
 // concurrent requests for the same collection into a single upstream fetch.
@@ -166,7 +166,7 @@ async function handleCollection(res, kind, name, refresh) {
   });
 }
 
-/** Seed cache/events/ from public/data/events.json, grouped by game system. */
+/** Seed cache/events/ from seed/events.json, grouped by game system. */
 async function seedEventCacheFromBundle() {
   const seed = await readJson(SEED_PATH);
   if (!seed) return;

@@ -34,7 +34,7 @@ still served as-is — `stale` is only a UI flag. The cache is re-fetched only
 on first request for a system or on an explicit `?refresh=1`.
 
 On first run, if `cache/events/` is empty, the plugin seeds it from the
-existing `public/data/events.json` (kept solely as seed data), grouping events
+existing `seed/events.json` (kept solely as seed data), grouping events
 by `gameSystem`.
 
 ### Shared code

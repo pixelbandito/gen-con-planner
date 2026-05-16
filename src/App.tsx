@@ -134,23 +134,36 @@ export default function App() {
     return loadCollectionEvents(kind, name, true);
   }
 
-  function refreshCatalogs() {
-    fetchSystems(true)
-      .then(({ systems }) => {
-        setGameCatalog(systems);
-        setSystemError(null);
-      })
-      .catch((e: unknown) => {
-        setSystemError(e instanceof Error ? e.message : String(e));
-      });
-    fetchCategories(true)
-      .then(({ categories }) => {
-        setCategoryCatalog(categories);
-        setSystemError(null);
-      })
-      .catch((e: unknown) => {
-        setSystemError(e instanceof Error ? e.message : String(e));
-      });
+  // Refresh both catalogs together. Each catalog's result is applied
+  // independently (a catalog that loaded still updates even if the other
+  // failed), but `systemError` is only cleared when BOTH succeed — so one
+  // catalog's success can never mask the other's failure.
+  async function refreshCatalogs() {
+    const [systemsResult, categoriesResult] = await Promise.allSettled([
+      fetchSystems(true),
+      fetchCategories(true),
+    ]);
+
+    if (systemsResult.status === 'fulfilled') {
+      setGameCatalog(systemsResult.value.systems);
+    }
+    if (categoriesResult.status === 'fulfilled') {
+      setCategoryCatalog(categoriesResult.value.categories);
+    }
+
+    const systemsFailed = systemsResult.status === 'rejected';
+    const categoriesFailed = categoriesResult.status === 'rejected';
+    if (!systemsFailed && !categoriesFailed) {
+      setSystemError(null);
+    } else if (systemsFailed && categoriesFailed) {
+      setSystemError(
+        'Could not refresh the game-system catalog or the category catalog',
+      );
+    } else if (systemsFailed) {
+      setSystemError('Could not refresh the game-system catalog');
+    } else {
+      setSystemError('Could not refresh the category catalog');
+    }
   }
 
   // Flattened, id-deduped event list derived from all loaded collections.

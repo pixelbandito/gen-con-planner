@@ -17,7 +17,7 @@ in if your first choice sells out.
 
 ## Data — two strictly separated kinds
 
-1. **Events (read-only, scraped)** — `public/data/events.json`, bundled into the
+1. **Events (read-only, scraped)** — `seed/events.json`, bundled into the
    app via a JSON import. Produced by `scripts/scrape.mjs`. The UI never writes
    it.
 2. **Wishlist (read-write, yours)** — `localStorage`, with export/import to a
@@ -70,7 +70,7 @@ node scripts/scrape.mjs "Magic: The Gathering" "Dungeons & Dragons"
 
 Calls `https://www.gencon.com/api/event_search?ag[]=eo&ag[]=tn&game[]=<name>`,
 follows pagination until `has_more` is false, normalizes records, dedupes by
-`id`, and writes `public/data/events.json`. No auth required.
+`id`, and writes `seed/events.json`. No auth required.
 
 ## UI
 

@@ -70,13 +70,13 @@ App passes `onSetRank`.
 **Step 4 — `server/gencon-proxy.mjs`.** Export a function `genconProxy()` returning a Vite plugin object with `name`, `configureServer(server)`, and `configurePreviewServer(server)`. Both attach the same connect-style middleware handling:
 - `GET /api/gencon/systems` — read `cache/systems.json`; if missing or `?refresh=1`, `fetchGameSystems()`, write cache with `fetchedAt = new Date().toISOString()`. Respond `{ fetchedAt, stale: isStale(fetchedAt), systems }`.
 - `GET /api/gencon/events?game=<name>` — read `cache/events/<slug>.json`; if missing or `?refresh=1`, `fetchEvents(name)`, write cache. Use an in-flight `Map` keyed by slug so concurrent requests for the same system await one fetch. Respond `{ gameSystem, fetchedAt, stale, events }`.
-- `GET /api/gencon/events` (no `game`) — read every `cache/events/*.json`; respond `{ systems: [{ gameSystem, fetchedAt, stale, events }] }`. If `cache/events/` is empty/absent, first seed it: read `public/data/events.json`, group `events` by `gameSystem`, write one `cache/events/<slug>.json` per group with `fetchedAt` = that file's `scrapedAt`.
+- `GET /api/gencon/events` (no `game`) — read every `cache/events/*.json`; respond `{ systems: [{ gameSystem, fetchedAt, stale, events }] }`. If `cache/events/` is empty/absent, first seed it: read `seed/events.json`, group `events` by `gameSystem`, write one `cache/events/<slug>.json` per group with `fetchedAt` = that file's `scrapedAt`.
 - Errors → JSON `{ error }` with status 502 (upstream) or 500.
 Cache writes: `mkdir -p` the dirs, `writeFile` JSON. Keep it simple and synchronous-friendly with async/await.
 
 **Step 5 — `vite.config.ts`.** Import and add `genconProxy()` to `plugins`.
 
-**Step 6 — `scripts/scrape.mjs`.** Refactor to import `normalizeEvent`/`fetchEvents`/`slugify` from `server/gencon.mjs` (drop the now-duplicated local copies) and write each system to `cache/events/<slug>.json` in the proxy's cache format (`{ gameSystem, fetchedAt, events }`) instead of the single `public/data/events.json`. Keep its CLI argument behavior.
+**Step 6 — `scripts/scrape.mjs`.** Refactor to import `normalizeEvent`/`fetchEvents`/`slugify` from `server/gencon.mjs` (drop the now-duplicated local copies) and write each system to `cache/events/<slug>.json` in the proxy's cache format (`{ gameSystem, fetchedAt, events }`) instead of the single `seed/events.json`. Keep its CLI argument behavior.
 
 **Verify:** `npm run test` (now includes `server/gencon.test.ts`), `npm run typecheck`, `npm run build` green. Smoke: `npm run dev`, then `curl 'http://localhost:5757/api/gencon/events'` returns JSON with the seeded systems; `curl 'http://localhost:5757/api/gencon/systems'` returns the catalog (live fetch on first call). Kill npm + child vite. Commit.
 

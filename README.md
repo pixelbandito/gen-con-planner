@@ -16,10 +16,17 @@ Open the printed URL. The wishlist auto-saves to `localStorage`; use the
 Export/Import buttons in the Wishlist panel to back it up or move it between
 machines.
 
+## Running the app
+
+The app must be run via `npm run dev` (or `npm run preview` after
+`npm run build`). The GenCon proxy that serves event data is a Vite plugin and
+requires Node at runtime, so a pure static deploy of `dist/` will not include
+the `/api/gencon/*` routes and will not load any events.
+
 ## Refreshing event data
 
 Event data is scraped from Gen Con's public `event_search` API into
-`public/data/events.json`. Re-run it any time, with any game systems:
+`seed/events.json`. Re-run it any time, with any game systems:
 
 ```bash
 npm run scrape "Magic: The Gathering" "Dungeons & Dragons"
@@ -46,7 +53,7 @@ the ranked wishlist.
 
 ```
 scripts/scrape.mjs        Reusable CLI scraper
-public/data/events.json   Scraped, read-only event dataset
+seed/events.json          Scraped, read-only seed event dataset
 src/types.ts              Event + Wishlist models
 src/lib/schedule.ts       Conflict / greedy-schedule / hedge logic
 src/lib/storage.ts        localStorage + JSON export/import
