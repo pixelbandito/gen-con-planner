@@ -133,14 +133,23 @@ export function WishlistPanel({
               : undefined;
           const pastLimit = i >= SUBMISSION_LIMIT;
           const isMatch = activeMatchIds.has(entry.eventId);
+          // Drop indicator edge depends on drag direction: dragging down lands
+          // the item after the target (bottom edge); dragging up lands it
+          // before the target (top edge).
           const isDropTarget = dropIndex === i;
+          const draggingDown =
+            dragIndexRef.current != null && dragIndexRef.current < i;
           const liClass = [
             'wish-row',
             ev ? gameClass(ev.gameSystem) : '',
             `is-${status}`,
             pastLimit ? 'is-past-limit' : '',
             isMatch ? 'is-match' : '',
-            isDropTarget ? 'is-drop-target' : '',
+            isDropTarget
+              ? draggingDown
+                ? 'is-drop-after'
+                : 'is-drop-before'
+              : '',
           ]
             .filter(Boolean)
             .join(' ');
@@ -163,10 +172,13 @@ export function WishlistPanel({
                 className="wish-grip"
                 draggable
                 title="Drag to reorder"
-                aria-label="Drag to reorder"
+                aria-hidden="true"
                 onDragStart={(e) => {
                   dragIndexRef.current = i;
                   e.dataTransfer.effectAllowed = 'move';
+                  // Required: some browsers (Firefox) won't start a drag unless
+                  // dataTransfer has data set. The drop logic reads dragIndexRef,
+                  // not this payload, so the value here is unused but necessary.
                   e.dataTransfer.setData('text/plain', String(i));
                 }}
                 onDragEnd={endDrag}
