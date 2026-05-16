@@ -30,6 +30,11 @@ interface Props {
 const MIN_BLOCK_PX = 26;
 const MAX_RANK = 300;
 const SLOT_MIN = 30;
+/**
+ * Right-edge strip of every day column kept clear of event blocks so a slot
+ * search can always be started there, no matter how full the column is.
+ */
+const RIGHT_GUTTER_PX = 24;
 
 /** Day-window choices for the day-count zoom. */
 type DaysShown = 1 | 2 | 4 | 'all';
@@ -182,8 +187,11 @@ export function AgendaView({
       lo = Math.min(lo, p.startMin);
       hi = Math.max(hi, p.endMin);
     }
-    const minH = all.length ? Math.floor(lo / 60) : 9;
-    const maxH = all.length ? Math.ceil(hi / 60) : 23;
+    // When there are events, pad the data-driven bounds by an hour on each
+    // side so there is clickable empty time above the earliest event and
+    // below the latest. Fixed TIME_WINDOWS views clamp this back themselves.
+    const minH = all.length ? Math.max(0, Math.floor(lo / 60) - 1) : 9;
+    const maxH = all.length ? Math.ceil(hi / 60) + 1 : 23;
 
     return {
       byDay: grouped,
@@ -264,18 +272,44 @@ export function AgendaView({
     onUncollapseSearch();
   }
 
-  // Highlight bounds for the live drag and for the committed selection.
-  const dragLo = dragRange ? Math.min(dragRange[0], dragRange[1]) : null;
-  const dragHi = dragRange ? Math.max(dragRange[0], dragRange[1]) : null;
-
-  function slotSelected(startTs: number): boolean {
-    const endTs = startTs + SLOT_MIN * 60000;
-    if (dragLo != null && dragHi != null) {
-      return startTs >= dragLo && startTs <= dragHi;
+  // The active selection as a UTC start/end timestamp pair: the live drag
+  // takes precedence over the committed slotSearch. The drag spans the anchor
+  // slot through the current slot; an `overlap` search is its single 30-min
+  // slot; a `contained` search uses its own start/end.
+  const selectionRange: [number, number] | null = (() => {
+    if (dragRange) {
+      const lo = Math.min(dragRange[0], dragRange[1]);
+      const hi = Math.max(dragRange[0], dragRange[1]);
+      return [lo, hi + SLOT_MIN * 60000];
     }
-    if (!slotSearch) return false;
-    if (slotSearch.kind === 'overlap') return slotSearch.ts === startTs;
-    return startTs >= slotSearch.start && endTs <= slotSearch.end;
+    if (!slotSearch) return null;
+    if (slotSearch.kind === 'overlap') {
+      return [slotSearch.ts, slotSearch.ts + SLOT_MIN * 60000];
+    }
+    return [slotSearch.start, slotSearch.end];
+  })();
+
+  /**
+   * The continuous highlight rectangle for a day, or null if the selection
+   * does not touch it. Splits the selection at midnight so a rectangle never
+   * extends past the column it belongs to.
+   */
+  function selectionRect(
+    dayKey: string,
+  ): { top: number; height: number } | null {
+    if (!selectionRange) return null;
+    const [y, mo, d] = dayKey.split('-').map(Number);
+    const dayStart = Date.UTC(y, mo - 1, d);
+    const dayEnd = dayStart + 24 * 60 * 60000;
+    const lo = Math.max(selectionRange[0], dayStart);
+    const hi = Math.min(selectionRange[1], dayEnd);
+    if (hi <= lo) return null;
+    const startMin = (lo - dayStart) / 60000;
+    const endMin = (hi - dayStart) / 60000;
+    return {
+      top: (startMin - lowHour * 60) * pxPerMin,
+      height: (endMin - startMin) * pxPerMin,
+    };
   }
 
   return (
@@ -478,7 +512,21 @@ export function AgendaView({
                     />
                   ))}
 
-                  {/* Transparent 30-min slot overlay for slot search. */}
+                  {/* Single continuous highlight for the active selection,
+                      sitting above the hour grid but below event blocks. */}
+                  {(() => {
+                    const rect = selectionRect(dayKey);
+                    if (!rect) return null;
+                    return (
+                      <div
+                        className="cal-selection"
+                        style={{ top: rect.top, height: rect.height }}
+                      />
+                    );
+                  })()}
+
+                  {/* Transparent 30-min slot overlay for slot search. Spans
+                      the full column width, including the right gutter. */}
                   <div className="cal-slot-layer">
                     {slotMins.map((m) => {
                       const ts = slotTs(
@@ -489,9 +537,7 @@ export function AgendaView({
                       return (
                         <div
                           key={m}
-                          className={`cal-slot ${
-                            slotSelected(ts) ? 'is-selected' : ''
-                          }`}
+                          className="cal-slot"
                           style={{
                             top: (m - lowHour * 60) * pxPerMin,
                             height: SLOT_MIN * pxPerMin,
@@ -504,52 +550,59 @@ export function AgendaView({
                     })}
                   </div>
 
-                  {(byDay.get(dayKey) ?? []).map((p) => {
-                    const top = (p.startMin - lowHour * 60) * pxPerMin;
-                    const height = Math.max(
-                      (p.endMin - p.startMin) * pxPerMin,
-                      MIN_BLOCK_PX,
-                    );
-                    const widthPct = 100 / p.cols;
-                    return (
-                      <div
-                        key={p.event.id}
-                        className={`cal-event ${gameClass(
-                          p.event.gameSystem,
-                        )} is-scheduled`}
-                        style={{
-                          top,
-                          height,
-                          left: `${p.col * widthPct}%`,
-                          width: `calc(${widthPct}% - 3px)`,
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onMouseUp={(e) => e.stopPropagation()}
-                        onClick={() => onSelect(p.event.id)}
-                        title={p.event.title}
-                      >
-                        <span className="cal-event-rank">#{p.rank}</span>
-                        <span className="cal-event-title">
-                          {p.event.title}
-                        </span>
-                        <span className="cal-event-time">
-                          {fmtTime(p.startW)}
-                        </span>
-                        <button
-                          className="cal-event-hide"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleHidden(p.event.id);
+                  {/* Event blocks are confined to the area left of the right
+                      gutter so that strip stays a live slot-search surface. */}
+                  <div
+                    className="cal-event-layer"
+                    style={{ right: RIGHT_GUTTER_PX }}
+                  >
+                    {(byDay.get(dayKey) ?? []).map((p) => {
+                      const top = (p.startMin - lowHour * 60) * pxPerMin;
+                      const height = Math.max(
+                        (p.endMin - p.startMin) * pxPerMin,
+                        MIN_BLOCK_PX,
+                      );
+                      const widthPct = 100 / p.cols;
+                      return (
+                        <div
+                          key={p.event.id}
+                          className={`cal-event ${gameClass(
+                            p.event.gameSystem,
+                          )} is-scheduled`}
+                          style={{
+                            top,
+                            height,
+                            left: `${p.col * widthPct}%`,
+                            width: `calc(${widthPct}% - 3px)`,
                           }}
                           onMouseDown={(e) => e.stopPropagation()}
-                          title="Hide from layout"
-                          aria-label="Hide from layout"
+                          onMouseUp={(e) => e.stopPropagation()}
+                          onClick={() => onSelect(p.event.id)}
+                          title={p.event.title}
                         >
-                          ✕
-                        </button>
-                      </div>
-                    );
-                  })}
+                          <span className="cal-event-rank">#{p.rank}</span>
+                          <span className="cal-event-title">
+                            {p.event.title}
+                          </span>
+                          <span className="cal-event-time">
+                            {fmtTime(p.startW)}
+                          </span>
+                          <button
+                            className="cal-event-hide"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleHidden(p.event.id);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            title="Hide from layout"
+                            aria-label="Hide from layout"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             ))}

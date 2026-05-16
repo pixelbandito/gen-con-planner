@@ -458,6 +458,16 @@ code {
   border-top: 1px solid #edeff3;
 }
 
+/* Event blocks live in this layer, inset from the right edge by the gutter
+   so the rightmost strip stays a live slot-search surface. */
+.cal-event-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 3;
+}
+
 .cal-event {
   position: absolute;
   overflow: hidden;
@@ -513,11 +523,25 @@ code {
   color: #fff;
 }
 
+/* ---- agenda selection highlight ---- */
+/* One continuous rectangle per day for the active slot search / drag range.
+   Sits above the hour grid but below the slot overlay and event blocks. */
+.cal-selection {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -1px;
+}
+
 /* ---- agenda slot overlay (slot search) ---- */
 .cal-slot-layer {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
 }
 .cal-slot {
   position: absolute;
@@ -529,13 +553,6 @@ code {
 .cal-slot:hover {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
-.cal-slot.is-selected {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  outline-offset: -1px;
-}
-/* Event blocks sit above the slot overlay so they stay clickable. */
-.cal-event { z-index: 2; }
 
 /* ---- wishlist ---- */
 .wishlist-actions {
