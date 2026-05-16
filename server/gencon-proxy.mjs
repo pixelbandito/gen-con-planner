@@ -265,7 +265,12 @@ async function handleEventsById(res, idsParam) {
     sendJson(res, 400, { error: 'ids query must list numeric event ids' });
     return;
   }
-  const fetched = await mapWithConcurrency(ids, 4, (id) => fetchEventById(id));
+  // Isolate per-id failures: a non-OK response for one id resolves to null
+  // instead of rejecting the whole batch, so that bad id is simply omitted
+  // from the response rather than failing recovery of every other id.
+  const fetched = await mapWithConcurrency(ids, 4, (id) =>
+    fetchEventById(id).catch(() => null),
+  );
   sendJson(res, 200, { events: fetched.filter((e) => e != null) });
 }
 

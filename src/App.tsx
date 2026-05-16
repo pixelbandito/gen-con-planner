@@ -283,6 +283,7 @@ export default function App() {
     if (recovering || missingWishlistIds.size === 0) return;
     setRecovering(true);
     try {
+      const requestedCount = missingWishlistIds.size;
       const { events: recovered } = await fetchEventsByIds([
         ...missingWishlistIds,
       ]);
@@ -293,7 +294,16 @@ export default function App() {
           return next;
         });
       }
-      setSystemError(null);
+      if (recovered.length >= requestedCount) {
+        setSystemError(null);
+      } else {
+        const notFound = requestedCount - recovered.length;
+        setSystemError(
+          `Recovered ${recovered.length} of ${requestedCount} wishlisted ` +
+            `events. ${notFound} could not be found on Gen Con (they may ` +
+            `have been removed).`,
+        );
+      }
     } catch (e: unknown) {
       setSystemError(e instanceof Error ? e.message : String(e));
     } finally {
