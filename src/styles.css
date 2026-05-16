@@ -410,24 +410,6 @@ code {
 }
 .hidden-chip:hover { background: #e2e5ec; }
 
-.cal-legend {
-  display: flex;
-  gap: 14px;
-  padding: 6px 14px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  flex: none;
-}
-.legend-item { display: flex; align-items: center; gap: 5px; }
-.legend-item::before {
-  content: "";
-  width: 14px;
-  height: 12px;
-  border-radius: 3px;
-  display: inline-block;
-}
-.legend-scheduled::before { background: var(--accent); }
-
 .cal-empty, .cal-footnote {
   padding: 16px;
   color: var(--ink-soft);

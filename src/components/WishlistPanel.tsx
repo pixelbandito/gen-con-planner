@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import type { GenConEvent, Wishlist } from '../types';
-import type { GreedyResult, ScheduleStatus } from '../lib/schedule';
+import type { GreedyResult } from '../lib/schedule';
 import { fmtDateTime } from '../lib/time';
-import { fmtCost, gameClass } from '../lib/style';
+import { fmtCost, gameClass, STATUS_LABEL } from '../lib/style';
 
 interface Props {
   wishlist: Wishlist;
@@ -21,13 +21,6 @@ interface Props {
   onClear: () => void;
   onCollapse: () => void;
 }
-
-const STATUS_LABEL: Record<ScheduleStatus, string> = {
-  scheduled: 'Scheduled',
-  bumped: 'Bumped',
-  untimed: 'No time set',
-  missing: 'Not in dataset',
-};
 
 /** GenCon's real wishlist max; this app allows 300 for pre-planning. */
 const SUBMISSION_LIMIT = 50;

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import type { GenConEvent } from '../types';
 import type { ScheduleStatus } from '../lib/schedule';
 import { fmtDateTime } from '../lib/time';
-import { fmtCost, gameClass } from '../lib/style';
+import { fmtCost, gameClass, STATUS_LABEL } from '../lib/style';
 
 interface Props {
   event: GenConEvent;
@@ -73,7 +73,7 @@ export function EventModal({
 
         {rank != null && (
           <div className={`modal-status status-${status}`}>
-            Wishlist rank #{rank} · {status}
+            Wishlist rank #{rank} · {status ? STATUS_LABEL[status] : status}
           </div>
         )}
 

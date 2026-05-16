@@ -437,10 +437,6 @@ export function AgendaView({
         )}
       </div>
 
-      <div className="cal-legend">
-        <span className="legend-item legend-scheduled">Wishlisted events</span>
-      </div>
-
       {days.length === 0 ? (
         <div className="cal-empty">
           Nothing to show for this priority filter. Add events from the browser

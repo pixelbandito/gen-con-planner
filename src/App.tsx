@@ -66,6 +66,16 @@ export default function App() {
     () => computeLayers(wishlist.entries, eventsById, hiddenIds),
     [wishlist, eventsById, hiddenIds],
   );
+
+  // Keep the layer selection in range: if the wishlist shrinks so that fewer
+  // layers exist, a stale high-layer selection would render an empty agenda.
+  useEffect(() => {
+    if (priorityFilter.mode !== 'layer') return;
+    const maxLayer = Math.max(1, layers.length);
+    if (priorityFilter.layer > maxLayer) {
+      setPriorityFilter({ mode: 'layer', layer: maxLayer });
+    }
+  }, [layers, priorityFilter]);
   // Layer 1 is the greedy fill of the whole wishlist: the full status map.
   const fullResult = useMemo(
     () => layers[0]?.result ?? new Map<number, GreedyResult>(),

@@ -7,13 +7,21 @@ const QUERIES_KEY = 'gencon-planner-queries-v1';
 
 function sanitizeEntries(raw: unknown): WishlistEntry[] {
   if (!Array.isArray(raw)) return [];
+  const seen = new Set<number>();
   return raw
     .filter((e): e is WishlistEntry =>
       !!e && typeof (e as WishlistEntry).eventId === 'number')
     .map((e) => ({
       eventId: e.eventId,
       ...(typeof e.note === 'string' ? { note: e.note } : {}),
-    }));
+    }))
+    // A wishlist cannot contain the same event twice — keep the first
+    // occurrence of each id to avoid duplicate React keys downstream.
+    .filter((e) => {
+      if (seen.has(e.eventId)) return false;
+      seen.add(e.eventId);
+      return true;
+    });
 }
 
 export function loadWishlist(): Wishlist {

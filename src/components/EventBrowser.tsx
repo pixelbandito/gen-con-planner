@@ -161,9 +161,17 @@ export function EventBrowser({
     slotSearch != null;
 
   // Lift the matching id set to App so the Wishlist pane can highlight.
-  // Keyed on `filtered`/`filterActive` so it fires only when the set changes.
+  // A fresh `new Set(...)` never structurally equals the previous one, so we
+  // track a signature of the emitted ids and only re-emit when it changes.
+  const lastMatchSig = useRef<string>('');
   useEffect(() => {
-    onMatchIds(filterActive ? new Set(filtered.map((e) => e.id)) : new Set());
+    const ids = filterActive ? filtered.map((e) => e.id) : [];
+    const sig = filterActive
+      ? [...ids].sort((a, b) => a - b).join(',')
+      : '';
+    if (sig === lastMatchSig.current) return;
+    lastMatchSig.current = sig;
+    onMatchIds(filterActive ? new Set(ids) : new Set());
   }, [filtered, filterActive, onMatchIds]);
 
   const shown = filtered.slice(0, RESULT_CAP);
