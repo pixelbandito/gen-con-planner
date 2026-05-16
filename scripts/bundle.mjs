@@ -41,7 +41,9 @@ async function main() {
     collections.push({
       kind: c.kind ?? 'game',
       name: c.name,
-      fetchedAt: c.fetchedAt,
+      // Default a missing timestamp to the epoch so it reads as stale
+      // (safer than null, which Date.parse → NaN would treat as fresh).
+      fetchedAt: c.fetchedAt ?? new Date(0).toISOString(),
       events: c.events ?? [],
     });
   }
