@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
-  EventsDataset,
   GenConEvent,
   PriorityFilter,
   SlotSearch,
@@ -8,6 +7,7 @@ import type {
 } from './types';
 import type { GreedyResult } from './lib/schedule';
 import { computeLayers, hedgeGroups } from './lib/schedule';
+import { fetchCachedEvents } from './lib/api';
 import {
   exportWishlist,
   loadWishlist,
@@ -23,7 +23,12 @@ import { EventModal } from './components/EventModal';
 const WISHLIST_CAP = 300;
 
 export default function App() {
-  const [dataset, setDataset] = useState<EventsDataset | null>(null);
+  // System-aware event model, sourced from the GenCon proxy cache.
+  const [events, setEvents] = useState<GenConEvent[]>([]);
+  const [systemsMeta, setSystemsMeta] = useState<
+    Map<string, { fetchedAt: string; stale: boolean }>
+  >(() => new Map());
+  const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [wishlist, setWishlist] = useState<Wishlist>(() => loadWishlist());
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -39,16 +44,25 @@ export default function App() {
   const [searchCollapsed, setSearchCollapsed] = useState(false);
   const [wishlistCollapsed, setWishlistCollapsed] = useState(false);
 
-  // Load the static, read-only event dataset.
+  // Load every cached game system from the GenCon proxy on startup.
   useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}data/events.json`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
+    fetchCachedEvents()
+      .then(({ systems }) => {
+        setEvents(systems.flatMap((s) => s.events));
+        setSystemsMeta(
+          new Map(
+            systems.map((s) => [
+              s.gameSystem,
+              { fetchedAt: s.fetchedAt, stale: s.stale },
+            ]),
+          ),
+        );
+        setDataLoading(false);
       })
-      .then((d: EventsDataset) => setDataset(d))
-      .catch((e: unknown) =>
-        setLoadError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => {
+        setLoadError(e instanceof Error ? e.message : String(e));
+        setDataLoading(false);
+      });
   }, []);
 
   // Persist the wishlist whenever it changes.
@@ -58,9 +72,9 @@ export default function App() {
 
   const eventsById = useMemo(() => {
     const m = new Map<number, GenConEvent>();
-    if (dataset) for (const e of dataset.events) m.set(e.id, e);
+    for (const e of events) m.set(e.id, e);
     return m;
-  }, [dataset]);
+  }, [events]);
 
   // Agenda layers honor hidden events — hiding is an Agenda-only view filter.
   const agendaLayers = useMemo(
@@ -202,16 +216,27 @@ export default function App() {
     (e) => fullResult.get(e.eventId)?.status === 'bumped',
   ).length;
 
+  // Game systems and the most-recent fetch time, derived from the cache meta.
+  const gameSystems = useMemo(
+    () => [...systemsMeta.keys()].sort(),
+    [systemsMeta],
+  );
+  const scrapedAt = useMemo(() => {
+    let latest = '';
+    for (const { fetchedAt } of systemsMeta.values()) {
+      if (fetchedAt > latest) latest = fetchedAt;
+    }
+    return latest;
+  }, [systemsMeta]);
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
           <h1>Gen Con Planner</h1>
-          {dataset && (
+          {!dataLoading && !loadError && (
             <span className="dataset-meta">
-              {dataset.events.length} events ·{' '}
-              {dataset.gameSystems.join(', ')} · scraped{' '}
-              {dataset.scrapedAt.slice(0, 10)}
+              {events.length} events · {systemsMeta.size} systems
             </span>
           )}
         </div>
@@ -226,17 +251,22 @@ export default function App() {
 
       {loadError && (
         <div className="banner banner-error">
-          Could not load event data: {loadError}. Run{' '}
-          <code>npm run scrape</code> to generate{' '}
-          <code>public/data/events.json</code>.
+          Could not reach the GenCon proxy: {loadError}. The proxy is provided
+          by the dev/preview server — make sure it is running.
         </div>
       )}
 
-      {!dataset && !loadError && (
+      {dataLoading && !loadError && (
         <div className="banner">Loading events…</div>
       )}
 
-      {dataset && (
+      {!dataLoading && !loadError && events.length === 0 && (
+        <div className="banner">
+          No event data yet — pick a game system in Search to fetch it.
+        </div>
+      )}
+
+      {!dataLoading && !loadError && (
         <main className="panes">
           {searchCollapsed ? (
             <CollapsedRail
@@ -246,11 +276,11 @@ export default function App() {
             />
           ) : (
             <EventBrowser
-              events={dataset.events}
+              events={events}
               rankById={rankById}
               wishlistIds={wishlistIds}
-              gameSystems={dataset.gameSystems}
-              scrapedAt={dataset.scrapedAt}
+              gameSystems={gameSystems}
+              scrapedAt={scrapedAt}
               slotSearch={slotSearch}
               onAdd={addToWishlist}
               onRemove={removeFromWishlist}

@@ -34,6 +34,20 @@ export interface EventsDataset {
   events: GenConEvent[];
 }
 
+/** One entry in the GenCon game-system catalog. */
+export interface SystemCatalogEntry {
+  name: string;
+  eventCount: number;
+}
+
+/** A single game system's events as cached by the GenCon proxy. */
+export interface CachedSystem {
+  gameSystem: string;
+  fetchedAt: string;
+  stale: boolean;
+  events: GenConEvent[];
+}
+
 /** One entry in the ranked wishlist. Array position is the priority. */
 export interface WishlistEntry {
   eventId: number;
