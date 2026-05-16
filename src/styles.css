@@ -506,7 +506,9 @@ code {
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
-  z-index: 2;
+  /* Above .cal-event-layer (z-index 3) so event blocks scroll under the
+     sticky day header instead of bleeding over it. */
+  z-index: 4;
 }
 .cal-col-body { position: relative; }
 
