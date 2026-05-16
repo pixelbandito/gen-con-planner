@@ -5,6 +5,18 @@
 
 import type { CatalogEntry, Collection, CollectionKind } from '../types';
 
+/**
+ * Stable key for a collection in the client's `collections` map / loading
+ * sets. This is the single source of truth shared by App and EventBrowser.
+ *
+ * Note: this is intentionally distinct from the proxy's `${kind}-${slug}`
+ * cache-key/filename scheme — they live in separate namespaces and need not
+ * agree.
+ */
+export function collectionKey(kind: CollectionKind, name: string): string {
+  return `${kind}::${name}`;
+}
+
 /** GET the parsed JSON from a proxy route, throwing on a non-OK response. */
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path);

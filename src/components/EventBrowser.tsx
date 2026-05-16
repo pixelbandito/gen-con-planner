@@ -15,6 +15,7 @@ import {
 } from '../lib/time';
 import { fmtCost, gameClass } from '../lib/style';
 import { eventInterval } from '../lib/schedule';
+import { collectionKey } from '../lib/api';
 
 interface Props {
   events: GenConEvent[];
@@ -39,9 +40,22 @@ interface Props {
 
 const RESULT_CAP = 300;
 
-/** Stable key for a collection, matching App's `collections` map keys. */
-function collectionKey(kind: CollectionKind, name: string): string {
-  return `${kind}::${name}`;
+// A picker is catalog-driven; if its catalog has not loaded yet it falls
+// back to whichever collections of that kind are already loaded. Pure: every
+// input is an explicit argument, so it closes over nothing from component
+// scope.
+function catalogOptions(
+  kind: CollectionKind,
+  catalog: CatalogEntry[],
+  collections: Map<string, Collection>,
+): CatalogEntry[] {
+  if (catalog.length > 0) {
+    return [...catalog].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return [...collections.values()]
+    .filter((c) => c.kind === kind)
+    .map((c) => ({ name: c.name, eventCount: c.events.length }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Readable local-ish label for a raw timezone-agnostic millis value. */
@@ -92,26 +106,12 @@ export function EventBrowser({
 
   const [manageOpen, setManageOpen] = useState(false);
 
-  // A picker is catalog-driven; if its catalog has not loaded yet it falls
-  // back to whichever collections of that kind are already loaded.
-  function catalogOptions(
-    kind: CollectionKind,
-    catalog: CatalogEntry[],
-  ): CatalogEntry[] {
-    if (catalog.length > 0) {
-      return [...catalog].sort((a, b) => a.name.localeCompare(b.name));
-    }
-    return [...collections.values()]
-      .filter((c) => c.kind === kind)
-      .map((c) => ({ name: c.name, eventCount: c.events.length }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
   const systemOptions = useMemo(
-    () => catalogOptions('game', gameCatalog),
+    () => catalogOptions('game', gameCatalog, collections),
     [gameCatalog, collections],
   );
   const categoryOptions = useMemo(
-    () => catalogOptions('category', categoryCatalog),
+    () => catalogOptions('category', categoryCatalog, collections),
     [categoryCatalog, collections],
   );
 
@@ -125,13 +125,18 @@ export function EventBrowser({
     [collections],
   );
 
-  // Event ids belonging to any stale loaded collection — drives the stale tag.
+  // Event ids that drive the stale tag. An event is stale only if it appears
+  // in a stale collection AND in no non-stale collection — a fresh copy from
+  // any non-stale collection means the loaded data is current.
   const staleEventIds = useMemo(() => {
-    const ids = new Set<number>();
+    const staleIds = new Set<number>();
+    const freshIds = new Set<number>();
     for (const c of collections.values()) {
-      if (c.stale) for (const e of c.events) ids.add(e.id);
+      const target = c.stale ? staleIds : freshIds;
+      for (const e of c.events) target.add(e.id);
     }
-    return ids;
+    for (const id of freshIds) staleIds.delete(id);
+    return staleIds;
   }, [collections]);
 
   const days = useMemo(() => {

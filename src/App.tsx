@@ -11,6 +11,7 @@ import type {
 import type { GreedyResult } from './lib/schedule';
 import { computeLayers, hedgeGroups } from './lib/schedule';
 import {
+  collectionKey,
   fetchCachedEvents,
   fetchCategories,
   fetchCollection,
@@ -29,11 +30,6 @@ import { CollapsedRail } from './components/CollapsedRail';
 import { EventModal } from './components/EventModal';
 
 const WISHLIST_CAP = 300;
-
-/** Stable key for a collection in the `collections` map / loading sets. */
-function collectionKey(kind: CollectionKind, name: string): string {
-  return `${kind}::${name}`;
-}
 
 export default function App() {
   // Loaded collections (game systems + event categories), keyed `kind::name`.
