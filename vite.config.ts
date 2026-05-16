@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { genconProxy } from './server/gencon-proxy.mjs';
 
@@ -12,5 +12,10 @@ export default defineConfig({
   },
   preview: {
     port: 5758,
+  },
+  test: {
+    // Don't scan into git worktrees under .worktrees/, or their copies of the
+    // test files double-count when a worktree exists.
+    exclude: [...configDefaults.exclude, '.worktrees/**'],
   },
 });

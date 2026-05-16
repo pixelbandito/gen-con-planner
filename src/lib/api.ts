@@ -31,9 +31,36 @@ async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** GET /api/gencon/events — every collection currently cached. */
-export function fetchCachedEvents(): Promise<{ collections: Collection[] }> {
-  return getJson<{ collections: Collection[] }>('/api/gencon/events');
+/** A collection is "stale" once its data is older than this. */
+const STALE_MS = 7 * 24 * 3600 * 1000;
+
+/**
+ * Events for the app to start from. Tries the dev/preview proxy first; if it
+ * is unavailable — a static build served with no proxy, or offline — falls
+ * back to the bundled `public/data/events.json` so the app still works.
+ *
+ * The bundle stores `fetchedAt` per collection but not `stale`, so the
+ * fallback computes `stale` here to match the proxy's response shape.
+ */
+export async function fetchCachedEvents(): Promise<{
+  collections: Collection[];
+}> {
+  try {
+    return await getJson<{ collections: Collection[] }>('/api/gencon/events');
+  } catch {
+    const res = await fetch(`${import.meta.env.BASE_URL}data/events.json`);
+    if (!res.ok) {
+      throw new Error(`Could not load bundled events: HTTP ${res.status}`);
+    }
+    const bundle = (await res.json()) as {
+      collections: Omit<Collection, 'stale'>[];
+    };
+    const collections: Collection[] = (bundle.collections ?? []).map((c) => ({
+      ...c,
+      stale: Date.now() - Date.parse(c.fetchedAt) > STALE_MS,
+    }));
+    return { collections };
+  }
 }
 
 /**

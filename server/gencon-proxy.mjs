@@ -7,7 +7,7 @@
 //   GET /api/gencon/events?category=NAME - events for one event category
 //   GET /api/gencon/events?search=TEXT   - events for a free-text query
 //   GET /api/gencon/events               - all cached collections (seeds from
-//                                          seed/events.json if empty)
+//                                          public/data/events.json if empty)
 //   GET /api/gencon/events-by-id?ids=1,2 - re-fetch events by id (no caching)
 // `?refresh=1` forces a live re-fetch. Cache lives under cache/ (gitignored).
 //
@@ -35,7 +35,7 @@ const CACHE_DIR = join(ROOT, 'cache');
 const EVENTS_CACHE_DIR = join(CACHE_DIR, 'events');
 const SYSTEMS_CACHE = join(CACHE_DIR, 'systems.json');
 const CATEGORIES_CACHE = join(CACHE_DIR, 'categories.json');
-const SEED_PATH = join(ROOT, 'seed', 'events.json');
+const BUNDLE_PATH = join(ROOT, 'public', 'data', 'events.json');
 
 // In-flight collection fetches, keyed by `${kind}-${slug}` — collapses
 // concurrent requests for the same collection into a single upstream fetch.
@@ -174,23 +174,21 @@ async function handleCollection(res, kind, name, refresh) {
   });
 }
 
-/** Seed cache/events/ from seed/events.json, grouped by game system. */
+/**
+ * Seed cache/events/ from the bundled public/data/events.json — which is
+ * already in the { collections: [{ kind, name, fetchedAt, events }] } shape,
+ * so each collection is written straight to its cache file.
+ */
 async function seedEventCacheFromBundle() {
-  const seed = await readJson(SEED_PATH);
-  if (!seed) return;
-  const fetchedAt = seed.scrapedAt;
-  const bySystem = new Map();
-  for (const event of seed.events ?? []) {
-    const system = event.gameSystem ?? '';
-    if (!bySystem.has(system)) bySystem.set(system, []);
-    bySystem.get(system).push(event);
-  }
-  for (const [name, events] of bySystem) {
-    await writeJson(collectionPath('game', name), {
-      kind: 'game',
-      name,
-      fetchedAt,
-      events,
+  const bundle = await readJson(BUNDLE_PATH);
+  if (!bundle) return;
+  for (const c of bundle.collections ?? []) {
+    if (!c?.kind || !c?.name) continue;
+    await writeJson(collectionPath(c.kind, c.name), {
+      kind: c.kind,
+      name: c.name,
+      fetchedAt: c.fetchedAt,
+      events: c.events ?? [],
     });
   }
 }
