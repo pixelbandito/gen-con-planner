@@ -107,6 +107,9 @@ function pageUrl(game, page) {
  * by id, and return events sorted by `start` ascending.
  */
 export async function fetchEvents(gameSystem) {
+  // Defensive upper bound on pagination so a pathological API response
+  // (e.g. `has_more` stuck true) cannot loop forever.
+  const MAX_PAGES = 500;
   const byId = new Map();
   let page = 1;
   for (;;) {
@@ -127,6 +130,11 @@ export async function fetchEvents(gameSystem) {
       }
     }
     if (!data.has_more || records.length === 0) break;
+    if (page >= MAX_PAGES) {
+      throw new Error(
+        `GenCon event_search "${gameSystem}": exceeded ${MAX_PAGES}-page cap`,
+      );
+    }
     page += 1;
   }
   return [...byId.values()].sort((a, b) =>

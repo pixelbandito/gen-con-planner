@@ -7,7 +7,8 @@
 //                                      public/data/events.json if empty)
 // `?refresh=1` forces a live re-fetch. Cache lives under cache/ (gitignored).
 
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -37,10 +38,17 @@ async function readJson(path) {
   }
 }
 
-/** Write a value as pretty JSON, creating parent directories as needed. */
+/**
+ * Write a value as pretty JSON, creating parent directories as needed.
+ * The write is atomic: data is written to a unique temp file in the same
+ * directory and then renamed onto the final path, so concurrent readers
+ * never observe a half-written file.
+ */
 async function writeJson(path, value) {
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, JSON.stringify(value, null, 2) + '\n');
+  const tmpPath = `${path}.${randomUUID()}.tmp`;
+  await writeFile(tmpPath, JSON.stringify(value, null, 2) + '\n');
+  await rename(tmpPath, path);
 }
 
 /** List `cache/events/*.json` filenames; [] if the directory is missing. */
@@ -132,11 +140,24 @@ async function seedEventCacheFromBundle() {
   }
 }
 
+// Seed-once latch: collapses concurrent cold-cache requests into a single
+// seeding run. On failure the latch is reset so a later request can retry.
+let seedPromise = null;
+function ensureSeeded() {
+  if (!seedPromise) {
+    seedPromise = seedEventCacheFromBundle().catch((e) => {
+      seedPromise = null;
+      throw e;
+    });
+  }
+  return seedPromise;
+}
+
 /** GET /api/gencon/events (no game param) */
 async function handleAllEvents(res) {
   let files = await listEventCacheFiles();
   if (files.length === 0) {
-    await seedEventCacheFromBundle();
+    await ensureSeeded();
     files = await listEventCacheFiles();
   }
   const systems = [];
