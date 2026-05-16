@@ -3,11 +3,12 @@ import type {
   GenConEvent,
   PriorityFilter,
   SlotSearch,
+  SystemCatalogEntry,
   Wishlist,
 } from './types';
 import type { GreedyResult } from './lib/schedule';
 import { computeLayers, hedgeGroups } from './lib/schedule';
-import { fetchCachedEvents } from './lib/api';
+import { fetchCachedEvents, fetchSystemEvents, fetchSystems } from './lib/api';
 import {
   exportWishlist,
   loadWishlist,
@@ -30,6 +31,10 @@ export default function App() {
   >(() => new Map());
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // The GenCon game-system catalog, fetched separately and non-blocking.
+  const [catalog, setCatalog] = useState<SystemCatalogEntry[]>([]);
+  // Game-system names currently being fetched/refreshed live.
+  const [loadingSystems, setLoadingSystems] = useState(() => new Set<string>());
   const [wishlist, setWishlist] = useState<Wishlist>(() => loadWishlist());
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -65,10 +70,64 @@ export default function App() {
       });
   }, []);
 
+  // Load the game-system catalog separately — it must not block the app.
+  // On failure the picker falls back to the systems already loaded.
+  useEffect(() => {
+    fetchSystems()
+      .then(({ systems }) => setCatalog(systems))
+      .catch(() => {
+        /* Catalog unavailable — picker falls back to loaded systems. */
+      });
+  }, []);
+
   // Persist the wishlist whenever it changes.
   useEffect(() => {
     saveWishlist(wishlist);
   }, [wishlist]);
+
+  // Fetch one game system's events from the proxy and merge them into state.
+  // `refresh` forces the proxy to re-scrape rather than serve its cache.
+  async function loadSystemEvents(name: string, refresh: boolean) {
+    if (loadingSystems.has(name)) return;
+    setLoadingSystems((prev) => new Set(prev).add(name));
+    try {
+      const result = await fetchSystemEvents(name, refresh);
+      setEvents((prev) => [
+        ...prev.filter((e) => e.gameSystem !== name),
+        ...result.events,
+      ]);
+      setSystemsMeta((prev) =>
+        new Map(prev).set(name, {
+          fetchedAt: result.fetchedAt,
+          stale: result.stale,
+        }));
+      setLoadError(null);
+    } catch (e: unknown) {
+      setLoadError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoadingSystems((prev) => {
+        const next = new Set(prev);
+        next.delete(name);
+        return next;
+      });
+    }
+  }
+
+  function loadSystem(name: string) {
+    return loadSystemEvents(name, false);
+  }
+
+  function refreshSystem(name: string) {
+    return loadSystemEvents(name, true);
+  }
+
+  function refreshCatalog() {
+    fetchSystems(true)
+      .then(({ systems }) => setCatalog(systems))
+      .catch((e: unknown) => {
+        setLoadError(e instanceof Error ? e.message : String(e));
+      });
+  }
 
   const eventsById = useMemo(() => {
     const m = new Map<number, GenConEvent>();
@@ -216,19 +275,6 @@ export default function App() {
     (e) => fullResult.get(e.eventId)?.status === 'bumped',
   ).length;
 
-  // Game systems and the most-recent fetch time, derived from the cache meta.
-  const gameSystems = useMemo(
-    () => [...systemsMeta.keys()].sort(),
-    [systemsMeta],
-  );
-  const scrapedAt = useMemo(() => {
-    let latest = '';
-    for (const { fetchedAt } of systemsMeta.values()) {
-      if (fetchedAt > latest) latest = fetchedAt;
-    }
-    return latest;
-  }, [systemsMeta]);
-
   return (
     <div className="app">
       <header className="topbar">
@@ -279,8 +325,9 @@ export default function App() {
               events={events}
               rankById={rankById}
               wishlistIds={wishlistIds}
-              gameSystems={gameSystems}
-              scrapedAt={scrapedAt}
+              catalog={catalog}
+              systemsMeta={systemsMeta}
+              loadingSystems={loadingSystems}
               slotSearch={slotSearch}
               onAdd={addToWishlist}
               onRemove={removeFromWishlist}
@@ -288,6 +335,9 @@ export default function App() {
               onMatchIds={setActiveMatchIds}
               onClearSlotSearch={() => setSlotSearch(null)}
               onCollapse={() => setSearchCollapsed(true)}
+              onLoadSystem={loadSystem}
+              onRefreshSystem={refreshSystem}
+              onRefreshCatalog={refreshCatalog}
             />
           )}
           <AgendaView

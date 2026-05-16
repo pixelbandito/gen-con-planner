@@ -3,7 +3,6 @@
 import type { Wishlist, WishlistEntry } from '../types';
 
 const KEY = 'gencon-planner-wishlist-v1';
-const QUERIES_KEY = 'gencon-planner-queries-v1';
 
 function sanitizeEntries(raw: unknown): WishlistEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -40,30 +39,6 @@ export function loadWishlist(): Wishlist {
 export function saveWishlist(w: Wishlist): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(w));
-  } catch {
-    // Storage full or unavailable — nothing actionable to do.
-  }
-}
-
-/** The scraper query set: game-system names to feed `npm run scrape`. */
-export function loadQueries(): string[] {
-  try {
-    const raw = localStorage.getItem(QUERIES_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((q): q is string => typeof q === 'string');
-      }
-    }
-  } catch {
-    // Corrupt storage — fall through to an empty query set.
-  }
-  return [];
-}
-
-export function saveQueries(q: string[]): void {
-  try {
-    localStorage.setItem(QUERIES_KEY, JSON.stringify(q));
   } catch {
     // Storage full or unavailable — nothing actionable to do.
   }

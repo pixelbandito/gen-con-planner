@@ -186,61 +186,61 @@ code {
   gap: 10px;
   padding: 10px 14px;
 }
-.manage-meta {
+/* ---- loaded-data cache list ---- */
+.cache-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  font-size: 12px;
-  color: var(--ink-soft);
-}
-.manage-queries {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.manage-query-add {
-  display: flex;
-  gap: 6px;
-}
-.manage-query-add input {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font: inherit;
-  background: #fff;
-}
-.query-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.query-chip {
+.cache-row {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   font-size: 12px;
-  padding: 2px 4px 2px 9px;
-  border-radius: 999px;
-  background: #e4e9fb;
-  color: #324bb0;
 }
-.query-remove {
-  font: inherit;
+.cache-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.cache-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cache-time { color: var(--ink-soft); flex: none; }
+
+/* ---- stale markers ---- */
+.stale-badge {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fae7cf;
+  color: #9a5d12;
+}
+.stale-tag {
+  margin-left: 6px;
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #eef0f4;
+  color: var(--warn);
+}
+
+/* ---- live system-load indicator ---- */
+.system-loading {
   font-size: 11px;
-  line-height: 1;
-  padding: 1px 4px;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: #324bb0;
-  cursor: pointer;
+  color: var(--ink-soft);
+  padding: 1px 2px;
 }
-.query-remove:hover { background: rgba(50, 75, 176, 0.18); }
 
 /* ---- slot-search chip ---- */
 .slot-chip {

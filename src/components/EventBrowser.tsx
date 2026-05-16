@@ -1,16 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { GenConEvent, SlotSearch } from '../types';
-import { fmtDateTime, fmtDayLabel, fmtTime, parseWall } from '../lib/time';
+import type { GenConEvent, SlotSearch, SystemCatalogEntry } from '../types';
+import {
+  fmtDateTime,
+  fmtDayLabel,
+  fmtRelative,
+  fmtTime,
+  parseWall,
+} from '../lib/time';
 import { fmtCost, gameClass } from '../lib/style';
 import { eventInterval } from '../lib/schedule';
-import { loadQueries, saveQueries } from '../lib/storage';
+
+interface SystemMeta {
+  fetchedAt: string;
+  stale: boolean;
+}
 
 interface Props {
   events: GenConEvent[];
   rankById: Map<number, number>;
   wishlistIds: Set<number>;
-  gameSystems: string[];
-  scrapedAt: string;
+  catalog: SystemCatalogEntry[];
+  systemsMeta: Map<string, SystemMeta>;
+  loadingSystems: Set<string>;
   slotSearch: SlotSearch;
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
@@ -18,6 +29,9 @@ interface Props {
   onMatchIds: (ids: Set<number>) => void;
   onClearSlotSearch: () => void;
   onCollapse: () => void;
+  onLoadSystem: (name: string) => void;
+  onRefreshSystem: (name: string) => void;
+  onRefreshCatalog: () => void;
 }
 
 const RESULT_CAP = 300;
@@ -44,8 +58,9 @@ export function EventBrowser({
   events,
   rankById,
   wishlistIds,
-  gameSystems,
-  scrapedAt,
+  catalog,
+  systemsMeta,
+  loadingSystems,
   slotSearch,
   onAdd,
   onRemove,
@@ -53,6 +68,9 @@ export function EventBrowser({
   onMatchIds,
   onClearSlotSearch,
   onCollapse,
+  onLoadSystem,
+  onRefreshSystem,
+  onRefreshCatalog,
 }: Props) {
   const [text, setText] = useState('');
   const [gameSystem, setGameSystem] = useState('');
@@ -63,27 +81,24 @@ export function EventBrowser({
   const [hideWishlisted, setHideWishlisted] = useState(false);
 
   const [manageOpen, setManageOpen] = useState(false);
-  const [queries, setQueries] = useState<string[]>(() => {
-    const stored = loadQueries();
-    return stored.length > 0 ? stored : gameSystems;
-  });
-  const [queryDraft, setQueryDraft] = useState('');
-  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Persist the query set whenever it changes.
-  useEffect(() => {
-    saveQueries(queries);
-  }, [queries]);
+  // The system picker is catalog-driven; if the catalog has not loaded yet it
+  // falls back to whichever systems are already cached/loaded.
+  const systemOptions = useMemo(() => {
+    if (catalog.length > 0) {
+      return [...catalog].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return [...systemsMeta.keys()]
+      .sort()
+      .map((name) => ({ name, eventCount: 0 }));
+  }, [catalog, systemsMeta]);
 
-  useEffect(() => () => {
-    if (copyTimer.current) clearTimeout(copyTimer.current);
-  }, []);
-
-  const filterGameSystems = useMemo(
-    () => [...new Set(events.map((e) => e.gameSystem).filter(Boolean))].sort(),
-    [events],
+  // Sorted list of loaded systems for the cache-management section.
+  const loadedSystems = useMemo(
+    () => [...systemsMeta.keys()].sort(),
+    [systemsMeta],
   );
+
   const eventTypes = useMemo(
     () => [...new Set(events.map((e) => e.eventType).filter(Boolean))].sort(),
     [events],
@@ -176,35 +191,14 @@ export function EventBrowser({
 
   const shown = filtered.slice(0, RESULT_CAP);
 
-  function addQuery() {
-    const name = queryDraft.trim();
-    if (!name) return;
-    setQueries((prev) => (prev.includes(name) ? prev : [...prev, name]));
-    setQueryDraft('');
+  // Selecting a system filters the list and, if that system has not yet been
+  // loaded, kicks off a live fetch through the proxy.
+  function handleSystemChange(name: string) {
+    setGameSystem(name);
+    if (name && !systemsMeta.has(name)) onLoadSystem(name);
   }
 
-  function removeQuery(name: string) {
-    setQueries((prev) => prev.filter((q) => q !== name));
-  }
-
-  function copyScrapeCommand() {
-    const cmd =
-      `npm run scrape ` + queries.map((q) => `"${q}"`).join(' ');
-    const armReset = (state: 'ok' | 'fail') => {
-      setCopyState(state);
-      if (copyTimer.current) clearTimeout(copyTimer.current);
-      copyTimer.current = setTimeout(() => setCopyState('idle'), 2000);
-    };
-    const write = navigator.clipboard?.writeText;
-    if (!write) {
-      armReset('fail');
-      return;
-    }
-    write
-      .call(navigator.clipboard, cmd)
-      .then(() => armReset('ok'))
-      .catch(() => armReset('fail'));
-  }
+  const selectedLoading = gameSystem !== '' && loadingSystems.has(gameSystem);
 
   return (
     <section className="pane pane-browser">
@@ -231,12 +225,24 @@ export function EventBrowser({
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <select value={gameSystem} onChange={(e) => setGameSystem(e.target.value)}>
+        <select
+          value={gameSystem}
+          onChange={(e) => handleSystemChange(e.target.value)}
+        >
           <option value="">All game systems</option>
-          {filterGameSystems.map((g) => (
-            <option key={g} value={g}>{g}</option>
-          ))}
+          {systemOptions.map((s) => {
+            const loaded = systemsMeta.has(s.name);
+            const count = s.eventCount > 0 ? ` (${s.eventCount})` : '';
+            return (
+              <option key={s.name} value={s.name}>
+                {loaded ? '✓ ' : ''}{s.name}{count}
+              </option>
+            );
+          })}
         </select>
+        {selectedLoading && (
+          <div className="system-loading">Loading {gameSystem}…</div>
+        )}
         <select value={eventType} onChange={(e) => setEventType(e.target.value)}>
           <option value="">All event types</option>
           {eventTypes.map((t) => (
@@ -282,65 +288,44 @@ export function EventBrowser({
           aria-expanded={manageOpen}
         >
           <span className="manage-caret">{manageOpen ? '▾' : '▸'}</span>
-          Manage data
+          Loaded data ({loadedSystems.length})
         </button>
         {manageOpen && (
           <div className="manage-body">
-            <div className="manage-meta">
-              <div>{events.length} events</div>
-              <div>
-                Systems in current data:{' '}
-                {gameSystems.join(', ') || 'No game systems'}
+            {loadedSystems.length === 0 ? (
+              <div className="list-note">
+                No game systems loaded yet — pick one above to fetch it.
               </div>
-              <div>Scraped {scrapedAt.slice(0, 10)}</div>
-            </div>
-
-            <div className="manage-queries">
-              <div className="manage-query-add">
-                <input
-                  type="text"
-                  placeholder="Add a game system…"
-                  value={queryDraft}
-                  onChange={(e) => setQueryDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') addQuery();
-                  }}
-                />
-                <button className="btn btn-mini" onClick={addQuery}>
-                  Add
-                </button>
-              </div>
-              {queries.length === 0 ? (
-                <div className="list-note">No queries yet.</div>
-              ) : (
-                <ul className="query-list">
-                  {queries.map((q) => (
-                    <li key={q} className="query-chip">
-                      <span>{q}</span>
+            ) : (
+              <ul className="cache-list">
+                {loadedSystems.map((name) => {
+                  const meta = systemsMeta.get(name)!;
+                  const busy = loadingSystems.has(name);
+                  return (
+                    <li key={name} className="cache-row">
+                      <div className="cache-row-main">
+                        <span className="cache-name">{name}</span>
+                        {meta.stale && (
+                          <span className="stale-badge">stale</span>
+                        )}
+                        <span className="cache-time">
+                          {fmtRelative(meta.fetchedAt)}
+                        </span>
+                      </div>
                       <button
-                        className="query-remove"
-                        onClick={() => removeQuery(q)}
-                        title={`Remove "${q}"`}
-                        aria-label={`Remove ${q}`}
+                        className="btn btn-mini"
+                        onClick={() => onRefreshSystem(name)}
+                        disabled={busy}
                       >
-                        ✕
+                        {busy ? 'Refreshing…' : 'Refresh'}
                       </button>
                     </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <button
-              className="btn btn-mini"
-              onClick={copyScrapeCommand}
-              disabled={queries.length === 0}
-            >
-              {copyState === 'ok'
-                ? 'Copied!'
-                : copyState === 'fail'
-                  ? 'Copy failed'
-                  : 'Copy scrape command'}
+                  );
+                })}
+              </ul>
+            )}
+            <button className="btn btn-mini" onClick={onRefreshCatalog}>
+              Refresh catalog
             </button>
           </div>
         )}
@@ -362,6 +347,7 @@ export function EventBrowser({
         )}
         {shown.map((e) => {
           const inList = wishlistIds.has(e.id);
+          const stale = systemsMeta.get(e.gameSystem)?.stale ?? false;
           return (
             <div key={e.id} className={`event-row ${gameClass(e.gameSystem)}`}>
               <div className="event-row-main" onClick={() => onSelect(e.id)}>
@@ -374,6 +360,7 @@ export function EventBrowser({
                 <div className="event-row-meta">
                   {fmtDateTime(e.start, e.end)} · {fmtCost(e.cost)} ·{' '}
                   {e.ticketsAvailable ?? '?'} tix · {e.eventType}
+                  {stale && <span className="stale-tag">stale</span>}
                 </div>
                 <div className="event-row-sub">{e.groupSponsor}</div>
               </div>

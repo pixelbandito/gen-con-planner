@@ -70,3 +70,18 @@ export function fmtDateTime(
   const base = `${fmtDayLabel(s.dayKey)} · ${fmtTime(s)}`;
   return e ? `${base} – ${fmtTime(e)}` : base;
 }
+
+/** Short relative label for an ISO timestamp ("just now", "3 hours ago"). */
+export function fmtRelative(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return 'unknown';
+  const diffMs = Date.now() - then;
+  if (diffMs < 0) return 'just now';
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
