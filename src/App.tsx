@@ -149,15 +149,13 @@ export default function App() {
         alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`));
   }
 
-  // Cross-pane state lifted now, consumed by Search/Agenda/Wishlist in later
-  // units (slot-search, match highlight, collapsible panes). Referenced here
-  // so the lifted-but-not-yet-wired bindings stay live under noUnusedLocals.
+  // Cross-pane state lifted now, consumed by Search/Wishlist in later units
+  // (match highlight, collapsible panes). Referenced here so the
+  // lifted-but-not-yet-wired bindings stay live under noUnusedLocals.
   void [
-    slotSearch, setSlotSearch,
     activeMatchIds, setActiveMatchIds,
-    searchCollapsed, setSearchCollapsed,
+    searchCollapsed,
     wishlistCollapsed, setWishlistCollapsed,
-    toggleHidden,
   ];
 
   const scheduledCount = layers[0]?.scheduledIds.length ?? 0;
@@ -216,9 +214,13 @@ export default function App() {
             hiddenIds={hiddenIds}
             rankById={rankById}
             priorityFilter={priorityFilter}
+            slotSearch={slotSearch}
             onPriorityFilter={setPriorityFilter}
             onClearHidden={clearHidden}
             onSelect={setSelectedId}
+            onSlotSearch={setSlotSearch}
+            onUncollapseSearch={() => setSearchCollapsed(false)}
+            onToggleHidden={toggleHidden}
           />
           <WishlistPanel
             wishlist={wishlist}
@@ -243,8 +245,10 @@ export default function App() {
           rank={rankById.get(selectedId)}
           status={fullResult.get(selectedId)?.status}
           inWishlist={wishlistIds.has(selectedId)}
+          hiddenIds={hiddenIds}
           onAdd={addToWishlist}
           onRemove={removeFromWishlist}
+          onToggleHidden={toggleHidden}
           onClose={() => setSelectedId(null)}
         />
       )}

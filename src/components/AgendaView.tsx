@@ -1,8 +1,14 @@
-import { useMemo } from 'react';
-import type { GenConEvent, PriorityFilter, WishlistEntry } from '../types';
+import { useMemo, useRef, useState } from 'react';
+import type {
+  GenConEvent,
+  PriorityFilter,
+  SlotSearch,
+  WishlistEntry,
+} from '../types';
 import type { Layer } from '../lib/schedule';
 import { rangeItems } from '../lib/schedule';
 import { fmtDayLabel, fmtHour, fmtTime, parseWall } from '../lib/time';
+import type { WallTime } from '../lib/time';
 import { gameClass } from '../lib/style';
 
 interface Props {
@@ -12,14 +18,40 @@ interface Props {
   hiddenIds: Set<number>;
   rankById: Map<number, number>;
   priorityFilter: PriorityFilter;
+  slotSearch: SlotSearch;
   onPriorityFilter: (f: PriorityFilter) => void;
   onClearHidden: () => void;
   onSelect: (id: number) => void;
+  onSlotSearch: (s: SlotSearch) => void;
+  onUncollapseSearch: () => void;
+  onToggleHidden: (id: number) => void;
 }
 
-const PX_PER_MIN = 1;
 const MIN_BLOCK_PX = 26;
 const MAX_RANK = 300;
+const SLOT_MIN = 30;
+
+/** Day-window choices for the day-count zoom. */
+type DaysShown = 1 | 2 | 4 | 'all';
+const DAY_OPTIONS: DaysShown[] = [1, 2, 4, 'all'];
+
+/** Time-of-day window choices. Each maps to an [minHour, maxHour] clamp. */
+type TimeView = 'morning' | 'afternoon' | 'evening' | 'all';
+const TIME_WINDOWS: Record<TimeView, [number, number] | null> = {
+  morning: [6, 13],
+  afternoon: [12, 18],
+  evening: [17, 26],
+  all: null,
+};
+const TIME_OPTIONS: { id: TimeView; label: string }[] = [
+  { id: 'morning', label: 'Morning' },
+  { id: 'afternoon', label: 'Afternoon' },
+  { id: 'evening', label: 'Evening' },
+  { id: 'all', label: 'All day' },
+];
+
+/** Vertical density options, in pixels per minute. */
+const DENSITY_OPTIONS = [0.6, 1, 1.6];
 
 interface Placed {
   event: GenConEvent;
@@ -27,7 +59,7 @@ interface Placed {
   dayKey: string;
   startMin: number;
   endMin: number;
-  startW: ReturnType<typeof parseWall>;
+  startW: WallTime;
   col: number;
   cols: number;
 }
@@ -67,6 +99,12 @@ function packDay(items: Placed[]): void {
 const clampRank = (n: number) =>
   Number.isNaN(n) ? 1 : Math.min(MAX_RANK, Math.max(1, Math.round(n)));
 
+/** Build a Date.UTC-based timestamp for an hour/minute on a "YYYY-MM-DD" day. */
+function slotTs(dayKey: string, hour: number, minute: number): number {
+  const [y, mo, d] = dayKey.split('-').map(Number);
+  return Date.UTC(y, mo - 1, d, hour, minute);
+}
+
 export function AgendaView({
   entries,
   eventsById,
@@ -74,17 +112,31 @@ export function AgendaView({
   hiddenIds,
   rankById,
   priorityFilter,
+  slotSearch,
   onPriorityFilter,
   onClearHidden,
   onSelect,
+  onSlotSearch,
+  onUncollapseSearch,
+  onToggleHidden,
 }: Props) {
-  const { byDay, days, minHour, maxHour, untimed } = useMemo(() => {
+  // ---- zoom state (Task 5) ----
+  const [daysShown, setDaysShown] = useState<DaysShown>(4);
+  const [dayOffset, setDayOffset] = useState(0);
+  const [timeView, setTimeView] = useState<TimeView>('all');
+  const [pxPerMin, setPxPerMin] = useState(1);
+
+  // ---- slot drag state (Task 6) ----
+  const dragAnchor = useRef<number | null>(null);
+  const [dragRange, setDragRange] = useState<[number, number] | null>(null);
+
+  const { byDay, allDays, minHour, maxHour, untimed } = useMemo(() => {
     // The ranked event ids the agenda should draw for the active filter.
     const drawn: { eventId: number; rank: number }[] =
       priorityFilter.mode === 'layer'
         ? (layers[priorityFilter.layer - 1]?.scheduledIds ?? []).map((id) => ({
             eventId: id,
-            rank: rankById.get(id) ?? 0,
+            rank: rankById.get(id) ?? -1,
           }))
         : rangeItems(entries, hiddenIds, priorityFilter.a, priorityFilter.b);
 
@@ -132,24 +184,167 @@ export function AgendaView({
 
     return {
       byDay: grouped,
-      days: [...grouped.keys()].sort(),
+      allDays: [...grouped.keys()].sort(),
       minHour: minH,
       maxHour: maxH,
       untimed: untimedCount,
     };
   }, [entries, eventsById, layers, hiddenIds, rankById, priorityFilter]);
 
-  const bodyHeight = (maxHour - minHour) * 60 * PX_PER_MIN;
+  // Clamp the day-pan window so it never runs past either end.
+  const dayCount =
+    daysShown === 'all' ? allDays.length : Math.min(daysShown, allDays.length);
+  const maxOffset = Math.max(0, allDays.length - dayCount);
+  const clampedOffset = Math.min(dayOffset, maxOffset);
+  const days =
+    daysShown === 'all'
+      ? allDays
+      : allDays.slice(clampedOffset, clampedOffset + dayCount);
+
+  // Clamp the data-driven time bounds into the selected time-of-day window.
+  const window = TIME_WINDOWS[timeView];
+  const viewMinHour = window ? Math.max(minHour, window[0]) : minHour;
+  const viewMaxHour = window ? Math.min(maxHour, window[1]) : maxHour;
+  // Guard against an inverted range (e.g. evening-only data, morning view).
+  const lowHour = Math.min(viewMinHour, viewMaxHour);
+  const highHour = Math.max(viewMinHour, viewMaxHour);
+
+  const bodyHeight = (highHour - lowHour) * 60 * pxPerMin;
   const hours: number[] = [];
-  for (let h = minHour; h <= maxHour; h += 1) hours.push(h);
+  for (let h = lowHour; h <= highHour; h += 1) hours.push(h);
+
+  // Half-hour slot starts within the visible time window.
+  const slotMins: number[] = [];
+  for (let m = lowHour * 60; m < highHour * 60; m += SLOT_MIN) slotMins.push(m);
 
   const rangeA = priorityFilter.mode === 'range' ? priorityFilter.a : 1;
   const rangeB = priorityFilter.mode === 'range' ? priorityFilter.b : 50;
+
+  const canPanBack = daysShown !== 'all' && clampedOffset > 0;
+  const canPanFwd = daysShown !== 'all' && clampedOffset < maxOffset;
+
+  function panBy(delta: -1 | 1) {
+    setDayOffset((o) => Math.min(maxOffset, Math.max(0, o + delta)));
+  }
+
+  function changeDensity(delta: -1 | 1) {
+    const idx = DENSITY_OPTIONS.indexOf(pxPerMin);
+    const next = idx < 0 ? 1 : idx + delta;
+    if (next >= 0 && next < DENSITY_OPTIONS.length) {
+      setPxPerMin(DENSITY_OPTIONS[next]);
+    }
+  }
+
+  // ---- slot drag handlers (Task 6) ----
+  function slotDown(ts: number) {
+    dragAnchor.current = ts;
+    setDragRange([ts, ts]);
+  }
+
+  function slotEnter(ts: number) {
+    if (dragAnchor.current == null) return;
+    setDragRange([dragAnchor.current, ts]);
+  }
+
+  function slotUp(upTs: number) {
+    const anchor = dragAnchor.current;
+    dragAnchor.current = null;
+    setDragRange(null);
+    if (anchor == null) return;
+    if (anchor === upTs) {
+      onSlotSearch({ kind: 'overlap', ts: upTs });
+    } else {
+      const start = Math.min(anchor, upTs);
+      const end = Math.max(anchor, upTs) + SLOT_MIN * 60000;
+      onSlotSearch({ kind: 'contained', start, end });
+    }
+    onUncollapseSearch();
+  }
+
+  // Highlight bounds for the live drag and for the committed selection.
+  const dragLo = dragRange ? Math.min(dragRange[0], dragRange[1]) : null;
+  const dragHi = dragRange ? Math.max(dragRange[0], dragRange[1]) : null;
+
+  function slotSelected(startTs: number): boolean {
+    const endTs = startTs + SLOT_MIN * 60000;
+    if (dragLo != null && dragHi != null) {
+      return startTs >= dragLo && startTs <= dragHi;
+    }
+    if (!slotSearch) return false;
+    if (slotSearch.kind === 'overlap') return slotSearch.ts === startTs;
+    return startTs >= slotSearch.start && endTs <= slotSearch.end;
+  }
 
   return (
     <section className="pane pane-agenda">
       <div className="pane-head">
         <h2>Agenda</h2>
+        <div className="agenda-zoom">
+          <div className="zoom-group">
+            {DAY_OPTIONS.map((opt) => (
+              <button
+                key={String(opt)}
+                className={`btn btn-mini ${
+                  daysShown === opt ? 'is-active' : ''
+                }`}
+                onClick={() => {
+                  setDaysShown(opt);
+                  setDayOffset(0);
+                }}
+              >
+                {opt === 'all' ? 'All' : `${opt}d`}
+              </button>
+            ))}
+            <button
+              className="btn btn-mini"
+              onClick={() => panBy(-1)}
+              disabled={!canPanBack}
+              aria-label="Previous days"
+            >
+              ◀
+            </button>
+            <button
+              className="btn btn-mini"
+              onClick={() => panBy(1)}
+              disabled={!canPanFwd}
+              aria-label="Next days"
+            >
+              ▶
+            </button>
+          </div>
+          <div className="zoom-group">
+            {TIME_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                className={`btn btn-mini ${
+                  timeView === opt.id ? 'is-active' : ''
+                }`}
+                onClick={() => setTimeView(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="zoom-group">
+            <button
+              className="btn btn-mini"
+              onClick={() => changeDensity(-1)}
+              disabled={pxPerMin === DENSITY_OPTIONS[0]}
+              aria-label="Less vertical zoom"
+            >
+              −
+            </button>
+            <span className="zoom-label">Zoom</span>
+            <button
+              className="btn btn-mini"
+              onClick={() => changeDensity(1)}
+              disabled={pxPerMin === DENSITY_OPTIONS[DENSITY_OPTIONS.length - 1]}
+              aria-label="More vertical zoom"
+            >
+              +
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="priority-bar">
@@ -258,7 +453,7 @@ export function AgendaView({
                   <div
                     key={h}
                     className="cal-hour-label"
-                    style={{ top: (h - minHour) * 60 * PX_PER_MIN }}
+                    style={{ top: (h - lowHour) * 60 * pxPerMin }}
                   >
                     {fmtHour(h)}
                   </div>
@@ -269,24 +464,56 @@ export function AgendaView({
             {days.map((dayKey) => (
               <div key={dayKey} className="cal-col cal-day">
                 <div className="cal-col-head">{fmtDayLabel(dayKey)}</div>
-                <div className="cal-col-body" style={{ height: bodyHeight }}>
+                <div
+                  className="cal-col-body"
+                  style={{ height: bodyHeight }}
+                  onMouseLeave={() => {
+                    if (dragAnchor.current == null) setDragRange(null);
+                  }}
+                >
                   {hours.map((h) => (
                     <div
                       key={h}
                       className="cal-hour-line"
-                      style={{ top: (h - minHour) * 60 * PX_PER_MIN }}
+                      style={{ top: (h - lowHour) * 60 * pxPerMin }}
                     />
                   ))}
+
+                  {/* Transparent 30-min slot overlay for slot search. */}
+                  <div className="cal-slot-layer">
+                    {slotMins.map((m) => {
+                      const ts = slotTs(
+                        dayKey,
+                        Math.floor(m / 60),
+                        m % 60,
+                      );
+                      return (
+                        <div
+                          key={m}
+                          className={`cal-slot ${
+                            slotSelected(ts) ? 'is-selected' : ''
+                          }`}
+                          style={{
+                            top: (m - lowHour * 60) * pxPerMin,
+                            height: SLOT_MIN * pxPerMin,
+                          }}
+                          onMouseDown={() => slotDown(ts)}
+                          onMouseEnter={() => slotEnter(ts)}
+                          onMouseUp={() => slotUp(ts)}
+                        />
+                      );
+                    })}
+                  </div>
+
                   {(byDay.get(dayKey) ?? []).map((p) => {
-                    const top =
-                      (p.startMin - minHour * 60) * PX_PER_MIN;
+                    const top = (p.startMin - lowHour * 60) * pxPerMin;
                     const height = Math.max(
-                      (p.endMin - p.startMin) * PX_PER_MIN,
+                      (p.endMin - p.startMin) * pxPerMin,
                       MIN_BLOCK_PX,
                     );
                     const widthPct = 100 / p.cols;
                     return (
-                      <button
+                      <div
                         key={p.event.id}
                         className={`cal-event ${gameClass(
                           p.event.gameSystem,
@@ -297,6 +524,8 @@ export function AgendaView({
                           left: `${p.col * widthPct}%`,
                           width: `calc(${widthPct}% - 3px)`,
                         }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
                         onClick={() => onSelect(p.event.id)}
                         title={p.event.title}
                       >
@@ -304,12 +533,22 @@ export function AgendaView({
                         <span className="cal-event-title">
                           {p.event.title}
                         </span>
-                        {p.startW && (
-                          <span className="cal-event-time">
-                            {fmtTime(p.startW)}
-                          </span>
-                        )}
-                      </button>
+                        <span className="cal-event-time">
+                          {fmtTime(p.startW)}
+                        </span>
+                        <button
+                          className="cal-event-hide"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleHidden(p.event.id);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          title="Hide from layout"
+                          aria-label="Hide from layout"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     );
                   })}
                 </div>

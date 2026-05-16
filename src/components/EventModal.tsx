@@ -9,8 +9,10 @@ interface Props {
   rank?: number;
   status?: ScheduleStatus;
   inWishlist: boolean;
+  hiddenIds: Set<number>;
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
+  onToggleHidden: (id: number) => void;
   onClose: () => void;
 }
 
@@ -19,10 +21,13 @@ export function EventModal({
   rank,
   status,
   inWishlist,
+  hiddenIds,
   onAdd,
   onRemove,
+  onToggleHidden,
   onClose,
 }: Props) {
+  const isHidden = hiddenIds.has(event.id);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -101,6 +106,12 @@ export function EventModal({
               Add to wishlist
             </button>
           )}
+          <button
+            className={`btn ${isHidden ? 'is-active' : ''}`}
+            onClick={() => onToggleHidden(event.id)}
+          >
+            {isHidden ? 'Unhide' : 'Hide from layout'}
+          </button>
         </div>
       </div>
     </div>
