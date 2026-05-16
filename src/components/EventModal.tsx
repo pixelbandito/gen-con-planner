@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { GenConEvent } from '../types';
 import type { ScheduleStatus } from '../lib/schedule';
 import { fmtDateTime } from '../lib/time';
@@ -9,9 +9,11 @@ interface Props {
   rank?: number;
   status?: ScheduleStatus;
   inWishlist: boolean;
+  wishlistCount: number;
   hiddenIds: Set<number>;
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
+  onSetRank: (id: number, rank: number) => void;
   onToggleHidden: (id: number) => void;
   onClose: () => void;
 }
@@ -21,13 +23,37 @@ export function EventModal({
   rank,
   status,
   inWishlist,
+  wishlistCount,
   hiddenIds,
   onAdd,
   onRemove,
+  onSetRank,
   onToggleHidden,
   onClose,
 }: Props) {
   const isHidden = hiddenIds.has(event.id);
+  const showRankInput = inWishlist && rank != null;
+  // Local draft so typing an intermediate value doesn't immediately reorder.
+  const [rankDraft, setRankDraft] = useState(rank != null ? String(rank) : '');
+  useEffect(() => {
+    setRankDraft(rank != null ? String(rank) : '');
+  }, [rank]);
+
+  function commitRank() {
+    const n = Number(rankDraft);
+    if (
+      rank == null ||
+      rankDraft.trim() === '' ||
+      !Number.isFinite(n) ||
+      !Number.isInteger(n) ||
+      n < 1 ||
+      n > wishlistCount
+    ) {
+      setRankDraft(String(rank ?? ''));
+      return;
+    }
+    if (n !== rank) onSetRank(event.id, n);
+  }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -94,24 +120,60 @@ export function EventModal({
         )}
 
         <div className="modal-actions">
-          {inWishlist ? (
+          <div className="modal-section">
+            <div className="modal-section-row">
+              {inWishlist ? (
+                <button
+                  className="btn btn-danger"
+                  onClick={() => onRemove(event.id)}
+                >
+                  Remove from wishlist
+                </button>
+              ) : (
+                <button
+                  className="btn btn-add btn-add-wide"
+                  onClick={() => onAdd(event.id)}
+                >
+                  Add to wishlist
+                </button>
+              )}
+              {showRankInput && (
+                <label className="modal-rank-field">
+                  Priority
+                  <input
+                    type="number"
+                    min={1}
+                    max={wishlistCount}
+                    value={rankDraft}
+                    onChange={(e) => setRankDraft(e.target.value)}
+                    onBlur={commitRank}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitRank();
+                      }
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+
+          <div className="modal-section">
+            <span className="modal-section-caption">
+              Temporary view options
+            </span>
             <button
-              className="btn btn-danger"
-              onClick={() => onRemove(event.id)}
+              className={`btn ${isHidden ? 'is-active' : ''}`}
+              onClick={() => onToggleHidden(event.id)}
             >
-              Remove from wishlist
+              {isHidden ? 'Unhide from Agenda' : 'Hide from Agenda'}
             </button>
-          ) : (
-            <button className="btn btn-add" onClick={() => onAdd(event.id)}>
-              Add to wishlist
-            </button>
-          )}
-          <button
-            className={`btn ${isHidden ? 'is-active' : ''}`}
-            onClick={() => onToggleHidden(event.id)}
-          >
-            {isHidden ? 'Unhide' : 'Hide from layout'}
-          </button>
+            <p className="modal-section-help">
+              Hiding only affects the Agenda view — it does not remove the
+              event from your wishlist and is not saved.
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -62,24 +62,32 @@ export default function App() {
     return m;
   }, [dataset]);
 
-  const layers = useMemo(
+  // Agenda layers honor hidden events — hiding is an Agenda-only view filter.
+  const agendaLayers = useMemo(
     () => computeLayers(wishlist.entries, eventsById, hiddenIds),
     [wishlist, eventsById, hiddenIds],
+  );
+  // Wishlist layers ignore hidden events: status pills and header counts must
+  // reflect the true wishlist, not the Agenda's temporary view state.
+  const wishlistLayers = useMemo(
+    () => computeLayers(wishlist.entries, eventsById),
+    [wishlist, eventsById],
   );
 
   // Keep the layer selection in range: if the wishlist shrinks so that fewer
   // layers exist, a stale high-layer selection would render an empty agenda.
+  // The priority filter is an Agenda concern, so it tracks the Agenda layers.
   useEffect(() => {
     if (priorityFilter.mode !== 'layer') return;
-    const maxLayer = Math.max(1, layers.length);
+    const maxLayer = Math.max(1, agendaLayers.length);
     if (priorityFilter.layer > maxLayer) {
       setPriorityFilter({ mode: 'layer', layer: maxLayer });
     }
-  }, [layers, priorityFilter]);
+  }, [agendaLayers, priorityFilter]);
   // Layer 1 is the greedy fill of the whole wishlist: the full status map.
   const fullResult = useMemo(
-    () => layers[0]?.result ?? new Map<number, GreedyResult>(),
-    [layers],
+    () => wishlistLayers[0]?.result ?? new Map<number, GreedyResult>(),
+    [wishlistLayers],
   );
   const rankById = useMemo(() => {
     const m = new Map<number, number>();
@@ -143,6 +151,16 @@ export default function App() {
     });
   }
 
+  function setRank(eventId: number, rank: number) {
+    const index = wishlist.entries.findIndex((e) => e.eventId === eventId);
+    if (index < 0) return;
+    const clamped = Math.min(
+      wishlist.entries.length,
+      Math.max(1, Math.round(rank)),
+    );
+    reorderEntry(index, clamped - 1);
+  }
+
   function setNote(id: number, note: string) {
     setWishlist((w) => ({
       ...w,
@@ -179,7 +197,7 @@ export default function App() {
         alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`));
   }
 
-  const scheduledCount = layers[0]?.scheduledIds.length ?? 0;
+  const scheduledCount = wishlistLayers[0]?.scheduledIds.length ?? 0;
   const bumpedCount = wishlist.entries.filter(
     (e) => fullResult.get(e.eventId)?.status === 'bumped',
   ).length;
@@ -245,7 +263,7 @@ export default function App() {
           <AgendaView
             entries={wishlist.entries}
             eventsById={eventsById}
-            layers={layers}
+            layers={agendaLayers}
             hiddenIds={hiddenIds}
             rankById={rankById}
             priorityFilter={priorityFilter}
@@ -291,9 +309,11 @@ export default function App() {
           rank={rankById.get(selectedId)}
           status={fullResult.get(selectedId)?.status}
           inWishlist={wishlistIds.has(selectedId)}
+          wishlistCount={wishlist.entries.length}
           hiddenIds={hiddenIds}
           onAdd={addToWishlist}
           onRemove={removeFromWishlist}
+          onSetRank={setRank}
           onToggleHidden={toggleHidden}
           onClose={() => setSelectedId(null)}
         />
