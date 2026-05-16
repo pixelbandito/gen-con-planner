@@ -298,7 +298,7 @@ export function EventBrowser({
           value={gameSystem}
           options={systemSelectOptions}
           onChange={handleSystemChange}
-          placeholder="All game systems"
+          placeholder="Search game systems…"
           ariaLabel="Filter by game system"
         />
         {systemLoading && (
