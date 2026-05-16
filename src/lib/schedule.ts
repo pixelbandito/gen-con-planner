@@ -117,7 +117,11 @@ export function computeLayers(
     const firstBumped = slice.findIndex(
       (it) => result.get(it.eventId)?.status === 'bumped',
     );
-    if (firstBumped === -1) break;
+    // -1 = layer fully resolved, we are done. 0 should be unreachable (the
+    // first item of a slice can never be bumped — `placed` is empty when it
+    // is processed), but guard against it anyway so a future change to
+    // greedyFill can never turn this into an infinite loop.
+    if (firstBumped <= 0) break;
     start += firstBumped;
   }
   return layers;

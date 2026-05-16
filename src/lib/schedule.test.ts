@@ -64,6 +64,19 @@ describe('computeLayers (cascade)', () => {
     expect(layers[1].scheduledIds).toContain(3);     // rank-3 reappears (cascade)
     expect(layers[1].scheduledIds).toContain(2);
   });
+  it('terminates and produces one layer per pick when all events share a slot', () => {
+    const events = db(
+      ev(1, T(9), T(11)), ev(2, T(9), T(11)),
+      ev(3, T(9), T(11)), ev(4, T(9), T(11)),
+    );
+    const layers = computeLayers(wl(1, 2, 3, 4), events);
+    expect(layers).toHaveLength(4);
+    expect(layers.map((l) => l.startRank)).toEqual([1, 2, 3, 4]);
+    for (let i = 1; i < layers.length; i += 1) {
+      expect(layers[i].startRank).toBeGreaterThan(layers[i - 1].startRank);
+    }
+    expect(layers[layers.length - 1].scheduledIds).toEqual([4]);
+  });
   it('recomputes when an event is hidden', () => {
     const events = db(ev(1, T(9), T(11)), ev(2, T(10), T(12)));
     const layers = computeLayers(wl(1, 2), events, new Set([1]));
