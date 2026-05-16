@@ -66,7 +66,7 @@ export function EventBrowser({
     return stored.length > 0 ? stored : gameSystems;
   });
   const [queryDraft, setQueryDraft] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Persist the query set whenever it changes.
@@ -180,11 +180,20 @@ export function EventBrowser({
   function copyScrapeCommand() {
     const cmd =
       `npm run scrape ` + queries.map((q) => `"${q}"`).join(' ');
-    navigator.clipboard.writeText(cmd).then(() => {
-      setCopied(true);
+    const armReset = (state: 'ok' | 'fail') => {
+      setCopyState(state);
       if (copyTimer.current) clearTimeout(copyTimer.current);
-      copyTimer.current = setTimeout(() => setCopied(false), 2000);
-    });
+      copyTimer.current = setTimeout(() => setCopyState('idle'), 2000);
+    };
+    const write = navigator.clipboard?.writeText;
+    if (!write) {
+      armReset('fail');
+      return;
+    }
+    write
+      .call(navigator.clipboard, cmd)
+      .then(() => armReset('ok'))
+      .catch(() => armReset('fail'));
   }
 
   return (
@@ -261,7 +270,10 @@ export function EventBrowser({
           <div className="manage-body">
             <div className="manage-meta">
               <div>{events.length} events</div>
-              <div>{gameSystems.join(', ') || 'No game systems'}</div>
+              <div>
+                Systems in current data:{' '}
+                {gameSystems.join(', ') || 'No game systems'}
+              </div>
               <div>Scraped {scrapedAt.slice(0, 10)}</div>
             </div>
 
@@ -306,7 +318,11 @@ export function EventBrowser({
               onClick={copyScrapeCommand}
               disabled={queries.length === 0}
             >
-              {copied ? 'Copied!' : 'Copy scrape command'}
+              {copyState === 'ok'
+                ? 'Copied!'
+                : copyState === 'fail'
+                  ? 'Copy failed'
+                  : 'Copy scrape command'}
             </button>
           </div>
         )}
