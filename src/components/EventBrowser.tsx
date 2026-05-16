@@ -16,6 +16,8 @@ import {
 import { fmtCost, gameClass } from '../lib/style';
 import { eventInterval } from '../lib/schedule';
 import { collectionKey } from '../lib/api';
+import { SearchableSelect } from './SearchableSelect';
+import type { SearchableSelectOption } from './SearchableSelect';
 
 interface Props {
   events: GenConEvent[];
@@ -114,6 +116,23 @@ export function EventBrowser({
     () => catalogOptions('category', categoryCatalog, collections),
     [categoryCatalog, collections],
   );
+
+  // Options for the searchable game-system picker. Preserves the loaded-✓
+  // marker and event count in the label so they stay visible and searchable.
+  const systemSelectOptions = useMemo<SearchableSelectOption[]>(() => {
+    const opts: SearchableSelectOption[] = [
+      { value: '', label: 'All game systems' },
+    ];
+    for (const s of systemOptions) {
+      const loaded = collections.has(collectionKey('game', s.name));
+      const count = s.eventCount > 0 ? ` (${s.eventCount})` : '';
+      opts.push({
+        value: s.name,
+        label: `${loaded ? '✓ ' : ''}${s.name}${count}`,
+      });
+    }
+    return opts;
+  }, [systemOptions, collections]);
 
   // Loaded collections (both kinds), sorted, for the cache-management section.
   const loadedCollections = useMemo(
@@ -275,21 +294,13 @@ export function EventBrowser({
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <select
+        <SearchableSelect
           value={gameSystem}
-          onChange={(e) => handleSystemChange(e.target.value)}
-        >
-          <option value="">All game systems</option>
-          {systemOptions.map((s) => {
-            const loaded = collections.has(collectionKey('game', s.name));
-            const count = s.eventCount > 0 ? ` (${s.eventCount})` : '';
-            return (
-              <option key={s.name} value={s.name}>
-                {loaded ? '✓ ' : ''}{s.name}{count}
-              </option>
-            );
-          })}
-        </select>
+          options={systemSelectOptions}
+          onChange={handleSystemChange}
+          placeholder="All game systems"
+          ariaLabel="Filter by game system"
+        />
         {systemLoading && (
           <div className="system-loading">Loading {gameSystem}…</div>
         )}

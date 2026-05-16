@@ -158,6 +158,60 @@ code {
 }
 .check input { margin: 0; }
 
+/* ---- searchable-select combobox ---- */
+.searchable-select {
+  position: relative;
+  width: 100%;
+}
+.searchable-select-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  background: #fff;
+  color: var(--ink);
+}
+.searchable-select-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(20, 24, 33, 0.16);
+}
+.searchable-select-option {
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.searchable-select-option.is-selected {
+  font-weight: 600;
+}
+.searchable-select-option.is-highlighted {
+  background: color-mix(in srgb, var(--accent) 14%, #fff);
+  color: var(--accent);
+}
+.searchable-select-note {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
 /* ---- manage-data section ---- */
 .manage-data {
   border-bottom: 1px solid var(--line);
