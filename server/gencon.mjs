@@ -59,6 +59,26 @@ export function slugify(name) {
     .replace(/^-+|-+$/g, '');
 }
 
+/** Small deterministic 32-bit string hash, rendered base-36. */
+function shortHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+const SLUG_MAX = 100;
+
+/**
+ * Collision-safe slug for a cache filename. Short names slugify unchanged;
+ * names whose slug exceeds SLUG_MAX are truncated and suffixed with a hash of
+ * the FULL name, so distinct long queries always produce distinct slugs.
+ */
+export function cacheSlug(name) {
+  const slug = slugify(name);
+  if (slug.length <= SLUG_MAX) return slug;
+  return slug.slice(0, SLUG_MAX - 8) + '-' + shortHash(name);
+}
+
 /** True when a cache entry fetched at `fetchedAtIso` is older than 7 days. */
 export function isStale(fetchedAtIso) {
   return Date.now() - Date.parse(fetchedAtIso) > STALE_MS;

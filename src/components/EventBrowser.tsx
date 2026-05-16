@@ -134,7 +134,8 @@ export function EventBrowser({
     return opts;
   }, [systemOptions, collections]);
 
-  // Loaded collections (both kinds), sorted, for the cache-management section.
+  // Loaded collections (game, category, and search kinds), sorted, for the
+  // cache-management section.
   const loadedCollections = useMemo(
     () =>
       [...collections.values()].sort(

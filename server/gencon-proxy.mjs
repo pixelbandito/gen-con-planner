@@ -19,18 +19,14 @@ import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  cacheSlug,
   fetchCategories,
   fetchCategoryEvents,
   fetchEvents,
   fetchGameSystems,
   fetchSearchEvents,
   isStale,
-  slugify,
 } from './gencon.mjs';
-
-// Cap a slug used in a cache filename. A free-text search query can be long;
-// truncating keeps `cache/events/search-<slug>.json` a valid filename.
-const MAX_SLUG_LEN = 100;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE_DIR = join(ROOT, 'cache');
@@ -82,11 +78,6 @@ function sendJson(res, status, body) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(body));
-}
-
-/** Length-capped slug, stripping any trailing dash left by truncation. */
-function cacheSlug(name) {
-  return slugify(name).slice(0, MAX_SLUG_LEN).replace(/-+$/, '');
 }
 
 /** Cache file path for one collection. */

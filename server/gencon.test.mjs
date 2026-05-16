@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cacheSlug,
   isStale,
   normalizeEvent,
   parseBuckets,
@@ -18,6 +19,20 @@ describe('slugify', () => {
 
   it('collapses punctuation with no leading/trailing/double dashes', () => {
     expect(slugify('  --Foo!!! & ??Bar--  ')).toBe('foo-bar');
+  });
+});
+
+describe('cacheSlug', () => {
+  it('leaves a short name slugified unchanged', () => {
+    expect(cacheSlug('Magic: The Gathering')).toBe('magic-the-gathering');
+  });
+
+  it('produces distinct slugs for long queries differing only at the end', () => {
+    const base = 'dungeons and dragons '.repeat(8); // slug well over 100 chars
+    const a = cacheSlug(`${base}aaa`);
+    const b = cacheSlug(`${base}bbb`);
+    expect(slugify(`${base}aaa`).length).toBeGreaterThan(100);
+    expect(a).not.toBe(b);
   });
 });
 

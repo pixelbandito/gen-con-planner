@@ -32,7 +32,8 @@ import { EventModal } from './components/EventModal';
 const WISHLIST_CAP = 300;
 
 export default function App() {
-  // Loaded collections (game systems + event categories), keyed `kind::name`.
+  // Loaded collections (game systems, event categories, and free-text
+  // searches), keyed `kind::name`.
   const [collections, setCollections] = useState<Map<string, Collection>>(
     () => new Map(),
   );
