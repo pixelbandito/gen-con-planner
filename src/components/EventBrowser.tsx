@@ -22,6 +22,7 @@ interface Props {
   catalog: SystemCatalogEntry[];
   systemsMeta: Map<string, SystemMeta>;
   loadingSystems: Set<string>;
+  systemError: string | null;
   slotSearch: SlotSearch;
   onAdd: (id: number) => void;
   onRemove: (id: number) => void;
@@ -61,6 +62,7 @@ export function EventBrowser({
   catalog,
   systemsMeta,
   loadingSystems,
+  systemError,
   slotSearch,
   onAdd,
   onRemove,
@@ -327,6 +329,11 @@ export function EventBrowser({
             <button className="btn btn-mini" onClick={onRefreshCatalog}>
               Refresh catalog
             </button>
+            {systemError && (
+              <div className="list-note list-note-error">
+                Fetch failed: {systemError}
+              </div>
+            )}
           </div>
         )}
       </div>

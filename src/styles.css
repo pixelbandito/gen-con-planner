@@ -295,6 +295,7 @@ code {
   margin-right: 5px;
 }
 .list-note { padding: 14px; color: var(--ink-soft); font-size: 12px; }
+.list-note-error { color: var(--danger); }
 
 /* game-system color hooks */
 .sys-mtg { --sys-color: var(--sys-mtg); }

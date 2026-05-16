@@ -26,14 +26,6 @@ export interface GenConEvent {
   dupKey: string;
 }
 
-/** The bundled, read-only event dataset produced by the scraper. */
-export interface EventsDataset {
-  scrapedAt: string;
-  conventionId: number | null;
-  gameSystems: string[];
-  events: GenConEvent[];
-}
-
 /** One entry in the GenCon game-system catalog. */
 export interface SystemCatalogEntry {
   name: string;

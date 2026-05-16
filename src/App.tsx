@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   GenConEvent,
   PriorityFilter,
@@ -31,10 +31,14 @@ export default function App() {
   >(() => new Map());
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Per-system fetch failure — surfaced inline, not as the startup banner.
+  const [systemError, setSystemError] = useState<string | null>(null);
   // The GenCon game-system catalog, fetched separately and non-blocking.
   const [catalog, setCatalog] = useState<SystemCatalogEntry[]>([]);
   // Game-system names currently being fetched/refreshed live.
   const [loadingSystems, setLoadingSystems] = useState(() => new Set<string>());
+  // Synchronous in-flight guard — state Sets can read stale in rapid calls.
+  const inFlightSystems = useRef(new Set<string>());
   const [wishlist, setWishlist] = useState<Wishlist>(() => loadWishlist());
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -88,7 +92,8 @@ export default function App() {
   // Fetch one game system's events from the proxy and merge them into state.
   // `refresh` forces the proxy to re-scrape rather than serve its cache.
   async function loadSystemEvents(name: string, refresh: boolean) {
-    if (loadingSystems.has(name)) return;
+    if (inFlightSystems.current.has(name)) return;
+    inFlightSystems.current.add(name);
     setLoadingSystems((prev) => new Set(prev).add(name));
     try {
       const result = await fetchSystemEvents(name, refresh);
@@ -101,10 +106,11 @@ export default function App() {
           fetchedAt: result.fetchedAt,
           stale: result.stale,
         }));
-      setLoadError(null);
+      setSystemError(null);
     } catch (e: unknown) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      setSystemError(e instanceof Error ? e.message : String(e));
     } finally {
+      inFlightSystems.current.delete(name);
       setLoadingSystems((prev) => {
         const next = new Set(prev);
         next.delete(name);
@@ -123,9 +129,12 @@ export default function App() {
 
   function refreshCatalog() {
     fetchSystems(true)
-      .then(({ systems }) => setCatalog(systems))
+      .then(({ systems }) => {
+        setCatalog(systems);
+        setSystemError(null);
+      })
       .catch((e: unknown) => {
-        setLoadError(e instanceof Error ? e.message : String(e));
+        setSystemError(e instanceof Error ? e.message : String(e));
       });
   }
 
@@ -328,6 +337,7 @@ export default function App() {
               catalog={catalog}
               systemsMeta={systemsMeta}
               loadingSystems={loadingSystems}
+              systemError={systemError}
               slotSearch={slotSearch}
               onAdd={addToWishlist}
               onRemove={removeFromWishlist}
