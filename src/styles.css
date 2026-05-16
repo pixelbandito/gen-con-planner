@@ -559,7 +559,14 @@ code {
 .wishlist-actions {
   display: flex;
   gap: 6px;
-  padding: 8px 14px;
+  padding: 8px 14px 6px;
+  flex: none;
+}
+.wishlist-actions-note {
+  margin: 0;
+  padding: 0 14px 8px;
+  font-size: 11px;
+  color: var(--ink-soft);
   border-bottom: 1px solid var(--line);
   flex: none;
 }

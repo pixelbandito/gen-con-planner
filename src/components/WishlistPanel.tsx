@@ -98,11 +98,27 @@ export function WishlistPanel({
       </div>
 
       <div className="wishlist-actions">
-        <button className="btn" onClick={onExport}>Export</button>
-        <button className="btn" onClick={() => fileRef.current?.click()}>
-          Import
+        <button
+          className="btn"
+          onClick={onExport}
+          title="Download this wishlist as a JSON file"
+        >
+          Save
         </button>
-        <button className="btn btn-danger" onClick={onClear}>Clear</button>
+        <button
+          className="btn"
+          onClick={() => fileRef.current?.click()}
+          title="Load a wishlist from a JSON file"
+        >
+          Load
+        </button>
+        <button
+          className="btn btn-danger"
+          onClick={onClear}
+          title="Start a fresh, empty wishlist"
+        >
+          New
+        </button>
         <input
           ref={fileRef}
           type="file"
@@ -110,11 +126,25 @@ export function WishlistPanel({
           hidden
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) onImport(f);
+            if (f) {
+              // Load replaces the current wishlist — confirm before
+              // discarding a non-empty one.
+              if (
+                entries.length === 0 ||
+                confirm(
+                  'Load a wishlist file? This replaces your current wishlist.',
+                )
+              ) {
+                onImport(f);
+              }
+            }
             e.target.value = '';
           }}
         />
       </div>
+      <p className="wishlist-actions-note">
+        Auto-saved to this browser · Save / Load to move it as a file
+      </p>
 
       {entries.length === 0 && (
         <div className="list-note">
