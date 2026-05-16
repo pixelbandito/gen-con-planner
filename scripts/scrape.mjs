@@ -5,9 +5,10 @@
 //   node scripts/scrape.mjs "Magic: The Gathering" "Dungeons & Dragons"
 //
 // Fetches events for each game system from the public Gen Con API and writes
-// one cache file per system under cache/events/<slug>.json, in the same
-// format the dev/preview proxy (server/gencon-proxy.mjs) reads. This is an
-// optional way to pre-populate the proxy's cache. No authentication required.
+// one cache file per system under cache/events/game-<slug>.json, in the same
+// { kind, name, fetchedAt, events } collection format the dev/preview proxy
+// (server/gencon-proxy.mjs) reads. This is an optional way to pre-populate the
+// proxy's game collections. No authentication required.
 
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -29,11 +30,12 @@ async function main() {
   for (const game of games) {
     const events = await fetchEvents(game);
     const entry = {
-      gameSystem: game,
+      kind: 'game',
+      name: game,
       fetchedAt: new Date().toISOString(),
       events,
     };
-    const outPath = join(CACHE_DIR, `${slugify(game)}.json`);
+    const outPath = join(CACHE_DIR, `game-${slugify(game)}.json`);
     await writeFile(outPath, JSON.stringify(entry, null, 2) + '\n');
     console.log(`  ${game}: ${events.length} events -> ${outPath}`);
   }

@@ -1,17 +1,25 @@
 // Vite plugin: a server-side GenCon proxy backed by an on-disk cache.
 //
 // Routes (dev + preview servers only):
-//   GET /api/gencon/systems          - game-system catalog
-//   GET /api/gencon/events?game=NAME - events for one system
-//   GET /api/gencon/events           - all cached systems (seeds from
-//                                      public/data/events.json if empty)
+//   GET /api/gencon/systems              - game-system catalog
+//   GET /api/gencon/categories           - event-category catalog
+//   GET /api/gencon/events?game=NAME     - events for one game system
+//   GET /api/gencon/events?category=NAME - events for one event category
+//   GET /api/gencon/events               - all cached collections (seeds from
+//                                          public/data/events.json if empty)
 // `?refresh=1` forces a live re-fetch. Cache lives under cache/ (gitignored).
+//
+// A "collection" is one cacheable fetch unit: { kind, name, fetchedAt, events }
+// where kind is 'game' or 'category'. Cache files are
+// cache/events/<kind>-<slug>.json.
 
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  fetchCategories,
+  fetchCategoryEvents,
   fetchEvents,
   fetchGameSystems,
   isStale,
@@ -22,10 +30,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE_DIR = join(ROOT, 'cache');
 const EVENTS_CACHE_DIR = join(CACHE_DIR, 'events');
 const SYSTEMS_CACHE = join(CACHE_DIR, 'systems.json');
+const CATEGORIES_CACHE = join(CACHE_DIR, 'categories.json');
 const SEED_PATH = join(ROOT, 'public', 'data', 'events.json');
 
-// In-flight event fetches, keyed by slug — collapses concurrent requests
-// for the same game system into a single upstream fetch.
+// In-flight collection fetches, keyed by `${kind}-${slug}` — collapses
+// concurrent requests for the same collection into a single upstream fetch.
+// Keying on kind+slug keeps a game and a category from ever colliding.
 const inFlight = new Map();
 
 /** Read and JSON-parse a file, returning null if it does not exist. */
@@ -68,6 +78,21 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+/** Cache file path for one collection. */
+function collectionPath(kind, name) {
+  return join(EVENTS_CACHE_DIR, `${kind}-${slugify(name)}.json`);
+}
+
+/** Normalize a read cache entry into a collection (missing kind → 'game'). */
+function asCollection(entry) {
+  return {
+    kind: entry.kind ?? 'game',
+    name: entry.name ?? entry.gameSystem ?? '',
+    fetchedAt: entry.fetchedAt,
+    events: entry.events ?? [],
+  };
+}
+
 /** GET /api/gencon/systems */
 async function handleSystems(res, refresh) {
   let cached = refresh ? null : await readJson(SYSTEMS_CACHE);
@@ -83,37 +108,58 @@ async function handleSystems(res, refresh) {
   });
 }
 
-/** Fetch + cache events for one game system (deduped via the in-flight map). */
-async function loadEventsForSystem(name) {
-  const slug = slugify(name);
-  if (inFlight.has(slug)) return inFlight.get(slug);
+/** GET /api/gencon/categories */
+async function handleCategories(res, refresh) {
+  let cached = refresh ? null : await readJson(CATEGORIES_CACHE);
+  if (!cached) {
+    const categories = await fetchCategories();
+    cached = { fetchedAt: new Date().toISOString(), categories };
+    await writeJson(CATEGORIES_CACHE, cached);
+  }
+  sendJson(res, 200, {
+    fetchedAt: cached.fetchedAt,
+    stale: isStale(cached.fetchedAt),
+    categories: cached.categories,
+  });
+}
+
+/** Fetch + cache one collection (deduped via the in-flight map). */
+async function loadCollection(kind, name) {
+  const key = `${kind}-${slugify(name)}`;
+  if (inFlight.has(key)) return inFlight.get(key);
   const promise = (async () => {
-    const events = await fetchEvents(name);
+    const events =
+      kind === 'category'
+        ? await fetchCategoryEvents(name)
+        : await fetchEvents(name);
     const entry = {
-      gameSystem: name,
+      kind,
+      name,
       fetchedAt: new Date().toISOString(),
       events,
     };
-    await writeJson(join(EVENTS_CACHE_DIR, `${slug}.json`), entry);
+    await writeJson(collectionPath(kind, name), entry);
     return entry;
   })();
-  inFlight.set(slug, promise);
+  inFlight.set(key, promise);
   try {
     return await promise;
   } finally {
-    inFlight.delete(slug);
+    inFlight.delete(key);
   }
 }
 
-/** GET /api/gencon/events?game=NAME */
-async function handleEventsForGame(res, name, refresh) {
-  const cachePath = join(EVENTS_CACHE_DIR, `${slugify(name)}.json`);
-  let entry = refresh ? null : await readJson(cachePath);
+/** GET /api/gencon/events?game=NAME or ?category=NAME */
+async function handleCollection(res, kind, name, refresh) {
+  let entry = refresh ? null : await readJson(collectionPath(kind, name));
   if (!entry) {
-    entry = await loadEventsForSystem(name);
+    entry = await loadCollection(kind, name);
+  } else {
+    entry = asCollection(entry);
   }
   sendJson(res, 200, {
-    gameSystem: entry.gameSystem,
+    kind: entry.kind,
+    name: entry.name,
     fetchedAt: entry.fetchedAt,
     stale: isStale(entry.fetchedAt),
     events: entry.events,
@@ -131,9 +177,10 @@ async function seedEventCacheFromBundle() {
     if (!bySystem.has(system)) bySystem.set(system, []);
     bySystem.get(system).push(event);
   }
-  for (const [gameSystem, events] of bySystem) {
-    await writeJson(join(EVENTS_CACHE_DIR, `${slugify(gameSystem)}.json`), {
-      gameSystem,
+  for (const [name, events] of bySystem) {
+    await writeJson(collectionPath('game', name), {
+      kind: 'game',
+      name,
       fetchedAt,
       events,
     });
@@ -153,25 +200,27 @@ function ensureSeeded() {
   return seedPromise;
 }
 
-/** GET /api/gencon/events (no game param) */
+/** GET /api/gencon/events (no game/category param) */
 async function handleAllEvents(res) {
   let files = await listEventCacheFiles();
   if (files.length === 0) {
     await ensureSeeded();
     files = await listEventCacheFiles();
   }
-  const systems = [];
+  const collections = [];
   for (const file of files) {
     const entry = await readJson(join(EVENTS_CACHE_DIR, file));
     if (!entry) continue;
-    systems.push({
-      gameSystem: entry.gameSystem,
-      fetchedAt: entry.fetchedAt,
-      stale: isStale(entry.fetchedAt),
-      events: entry.events,
+    const c = asCollection(entry);
+    collections.push({
+      kind: c.kind,
+      name: c.name,
+      fetchedAt: c.fetchedAt,
+      stale: isStale(c.fetchedAt),
+      events: c.events,
     });
   }
-  sendJson(res, 200, { systems });
+  sendJson(res, 200, { collections });
 }
 
 /** Shared connect middleware for both the dev and preview servers. */
@@ -188,10 +237,17 @@ async function middleware(req, res, next) {
       await handleSystems(res, refresh);
       return;
     }
+    if (url.pathname === '/api/gencon/categories') {
+      await handleCategories(res, refresh);
+      return;
+    }
     if (url.pathname === '/api/gencon/events') {
       const game = url.searchParams.get('game');
+      const category = url.searchParams.get('category');
       if (game) {
-        await handleEventsForGame(res, game, refresh);
+        await handleCollection(res, 'game', game, refresh);
+      } else if (category) {
+        await handleCollection(res, 'category', category, refresh);
       } else {
         await handleAllEvents(res);
       }

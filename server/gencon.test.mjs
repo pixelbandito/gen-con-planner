@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isStale,
   normalizeEvent,
+  parseBuckets,
   parseSystemBuckets,
   slugify,
 } from './gencon.mjs';
@@ -52,6 +53,34 @@ describe('parseSystemBuckets', () => {
       { name: 'Dungeons & Dragons', eventCount: 1453 },
       { name: 'Magic: The Gathering', eventCount: 146 },
     ]);
+  });
+});
+
+describe('parseBuckets', () => {
+  it('parses event_type buckets: drops empties, dedupes, sorts', () => {
+    const metaJson = {
+      filtered: {
+        event_type: {
+          buckets: [
+            { key: '', doc_count: 5 },
+            { key: '   ', doc_count: 2 },
+            { key: 'Roleplaying Game', doc_count: 12 },
+            { key: ' Board Game', doc_count: 3 },
+            { key: 'Board Game', doc_count: 2580 },
+            { key: 'Escape Rooms', doc_count: 47 },
+          ],
+        },
+      },
+    };
+    expect(parseBuckets(metaJson, 'event_type')).toEqual([
+      { name: 'Board Game', eventCount: 2580 },
+      { name: 'Escape Rooms', eventCount: 47 },
+      { name: 'Roleplaying Game', eventCount: 12 },
+    ]);
+  });
+
+  it('returns [] when the aggregation is absent', () => {
+    expect(parseBuckets({ filtered: {} }, 'event_type')).toEqual([]);
   });
 });
 

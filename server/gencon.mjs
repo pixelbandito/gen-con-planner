@@ -5,8 +5,10 @@
 // required; the GenCon public API only needs an `accept` header.
 
 const EVENT_SEARCH = 'https://www.gencon.com/api/event_search';
-const META_DATA =
-  'https://www.gencon.com/api/event_search/meta_data?ag[]=eo&ag[]=tn&filter=game';
+const META_BASE =
+  'https://www.gencon.com/api/event_search/meta_data?ag[]=eo&ag[]=tn';
+const SYSTEMS_META = `${META_BASE}&filter=game`;
+const CATEGORIES_META = `${META_BASE}&filter=category`;
 
 const STALE_MS = 7 * 24 * 3600 * 1000;
 
@@ -63,12 +65,13 @@ export function isStale(fetchedAtIso) {
 }
 
 /**
- * Turn the meta_data game_system buckets into a clean catalog.
+ * Turn one meta_data aggregation's buckets into a clean catalog.
+ * `aggKey` selects the aggregation (`'game_system'` or `'event_type'`).
  * Drops empty/whitespace keys, dedupes by trimmed name keeping the larger
  * count, and sorts by name ascending.
  */
-export function parseSystemBuckets(metaJson) {
-  const buckets = metaJson?.filtered?.game_system?.buckets ?? [];
+export function parseBuckets(metaJson, aggKey) {
+  const buckets = metaJson?.filtered?.[aggKey]?.buckets ?? [];
   const byName = new Map();
   for (const bucket of buckets) {
     const name = (bucket.key ?? '').trim();
@@ -82,43 +85,59 @@ export function parseSystemBuckets(metaJson) {
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Fetch the GenCon game-system catalog. */
-export async function fetchGameSystems() {
-  const res = await fetch(META_DATA, {
+/** Turn the meta_data game_system buckets into a clean catalog. */
+export function parseSystemBuckets(metaJson) {
+  return parseBuckets(metaJson, 'game_system');
+}
+
+/** Fetch a meta_data URL and parse its buckets under `aggKey`. */
+async function fetchCatalog(url, aggKey) {
+  const res = await fetch(url, {
     headers: { accept: 'application/json' },
   });
   if (!res.ok) {
     throw new Error(`GenCon meta_data: HTTP ${res.status}`);
   }
   const json = await res.json();
-  return parseSystemBuckets(json);
+  return parseBuckets(json, aggKey);
 }
 
-/** Build one event_search page URL. */
-function pageUrl(game, page) {
+/** Fetch the GenCon game-system catalog. */
+export function fetchGameSystems() {
+  return fetchCatalog(SYSTEMS_META, 'game_system');
+}
+
+/** Fetch the GenCon event-category catalog. */
+export function fetchCategories() {
+  return fetchCatalog(CATEGORIES_META, 'event_type');
+}
+
+/** Build one event_search page URL for a given filter param. */
+function pageUrl(paramKey, value, page) {
   const params =
-    `ag[]=eo&ag[]=tn&game[]=${encodeURIComponent(game)}` +
+    `ag[]=eo&ag[]=tn&${paramKey}=${encodeURIComponent(value)}` +
     (page > 1 ? `&page=${page}` : '');
   return `${EVENT_SEARCH}?${params}`;
 }
 
 /**
- * Page through event_search for one game system, normalize records, dedupe
- * by id, and return events sorted by `start` ascending.
+ * Page through event_search for one filter value (`paramKey` = `'game[]'` or
+ * `'category[]'`), normalize records, dedupe by id, and return events sorted
+ * by `start` ascending.
  */
-export async function fetchEvents(gameSystem) {
+async function fetchAllEvents(paramKey, value) {
   // Defensive upper bound on pagination so a pathological API response
   // (e.g. `has_more` stuck true) cannot loop forever.
   const MAX_PAGES = 500;
   const byId = new Map();
   let page = 1;
   for (;;) {
-    const res = await fetch(pageUrl(gameSystem, page), {
+    const res = await fetch(pageUrl(paramKey, value, page), {
       headers: { accept: 'application/json' },
     });
     if (!res.ok) {
       throw new Error(
-        `GenCon event_search "${gameSystem}" page ${page}: HTTP ${res.status}`,
+        `GenCon event_search "${value}" page ${page}: HTTP ${res.status}`,
       );
     }
     const data = await res.json();
@@ -132,7 +151,7 @@ export async function fetchEvents(gameSystem) {
     if (!data.has_more || records.length === 0) break;
     if (page >= MAX_PAGES) {
       throw new Error(
-        `GenCon event_search "${gameSystem}": exceeded ${MAX_PAGES}-page cap`,
+        `GenCon event_search "${value}": exceeded ${MAX_PAGES}-page cap`,
       );
     }
     page += 1;
@@ -140,4 +159,14 @@ export async function fetchEvents(gameSystem) {
   return [...byId.values()].sort((a, b) =>
     (a.start ?? '').localeCompare(b.start ?? ''),
   );
+}
+
+/** Page through event_search for one game system. */
+export function fetchEvents(gameSystem) {
+  return fetchAllEvents('game[]', gameSystem);
+}
+
+/** Page through event_search for one event category. */
+export function fetchCategoryEvents(category) {
+  return fetchAllEvents('category[]', category);
 }

@@ -214,6 +214,17 @@ code {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.cache-kind {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #e4e9fb;
+  color: #324bb0;
+}
 .cache-time { color: var(--ink-soft); flex: none; }
 
 /* ---- stale markers ---- */

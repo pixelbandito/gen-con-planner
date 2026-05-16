@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  CatalogEntry,
+  Collection,
+  CollectionKind,
   GenConEvent,
   PriorityFilter,
   SlotSearch,
-  SystemCatalogEntry,
   Wishlist,
 } from './types';
 import type { GreedyResult } from './lib/schedule';
 import { computeLayers, hedgeGroups } from './lib/schedule';
-import { fetchCachedEvents, fetchSystemEvents, fetchSystems } from './lib/api';
+import {
+  fetchCachedEvents,
+  fetchCategories,
+  fetchCollection,
+  fetchSystems,
+} from './lib/api';
 import {
   exportWishlist,
   loadWishlist,
@@ -23,22 +30,29 @@ import { EventModal } from './components/EventModal';
 
 const WISHLIST_CAP = 300;
 
+/** Stable key for a collection in the `collections` map / loading sets. */
+function collectionKey(kind: CollectionKind, name: string): string {
+  return `${kind}::${name}`;
+}
+
 export default function App() {
-  // System-aware event model, sourced from the GenCon proxy cache.
-  const [events, setEvents] = useState<GenConEvent[]>([]);
-  const [systemsMeta, setSystemsMeta] = useState<
-    Map<string, { fetchedAt: string; stale: boolean }>
-  >(() => new Map());
+  // Loaded collections (game systems + event categories), keyed `kind::name`.
+  const [collections, setCollections] = useState<Map<string, Collection>>(
+    () => new Map(),
+  );
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // Per-system fetch failure — surfaced inline, not as the startup banner.
+  // Per-collection fetch failure — surfaced inline, not as the startup banner.
   const [systemError, setSystemError] = useState<string | null>(null);
-  // The GenCon game-system catalog, fetched separately and non-blocking.
-  const [catalog, setCatalog] = useState<SystemCatalogEntry[]>([]);
-  // Game-system names currently being fetched/refreshed live.
-  const [loadingSystems, setLoadingSystems] = useState(() => new Set<string>());
+  // The GenCon catalogs, fetched separately and non-blocking.
+  const [gameCatalog, setGameCatalog] = useState<CatalogEntry[]>([]);
+  const [categoryCatalog, setCategoryCatalog] = useState<CatalogEntry[]>([]);
+  // Collections currently being fetched/refreshed live, keyed `kind::name`.
+  const [loadingCollections, setLoadingCollections] = useState(
+    () => new Set<string>(),
+  );
   // Synchronous in-flight guard — state Sets can read stale in rapid calls.
-  const inFlightSystems = useRef(new Set<string>());
+  const inFlightCollections = useRef(new Set<string>());
   const [wishlist, setWishlist] = useState<Wishlist>(() => loadWishlist());
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -53,18 +67,12 @@ export default function App() {
   const [searchCollapsed, setSearchCollapsed] = useState(false);
   const [wishlistCollapsed, setWishlistCollapsed] = useState(false);
 
-  // Load every cached game system from the GenCon proxy on startup.
+  // Load every cached collection from the GenCon proxy on startup.
   useEffect(() => {
     fetchCachedEvents()
-      .then(({ systems }) => {
-        setEvents(systems.flatMap((s) => s.events));
-        setSystemsMeta(
-          new Map(
-            systems.map((s) => [
-              s.gameSystem,
-              { fetchedAt: s.fetchedAt, stale: s.stale },
-            ]),
-          ),
+      .then(({ collections: loaded }) => {
+        setCollections(
+          new Map(loaded.map((c) => [collectionKey(c.kind, c.name), c])),
         );
         setDataLoading(false);
       })
@@ -74,13 +82,18 @@ export default function App() {
       });
   }, []);
 
-  // Load the game-system catalog separately — it must not block the app.
-  // On failure the picker falls back to the systems already loaded.
+  // Load both catalogs separately — they must not block the app.
+  // On failure the pickers fall back to whatever collections are loaded.
   useEffect(() => {
     fetchSystems()
-      .then(({ systems }) => setCatalog(systems))
+      .then(({ systems }) => setGameCatalog(systems))
       .catch(() => {
-        /* Catalog unavailable — picker falls back to loaded systems. */
+        /* Catalog unavailable — picker falls back to loaded collections. */
+      });
+    fetchCategories()
+      .then(({ categories }) => setCategoryCatalog(categories))
+      .catch(() => {
+        /* Catalog unavailable — picker falls back to loaded collections. */
       });
   }, []);
 
@@ -89,54 +102,72 @@ export default function App() {
     saveWishlist(wishlist);
   }, [wishlist]);
 
-  // Fetch one game system's events from the proxy and merge them into state.
+  // Fetch one collection from the proxy and store it. Because `events` is
+  // derived from `collections`, storing the collection is all that is needed.
   // `refresh` forces the proxy to re-scrape rather than serve its cache.
-  async function loadSystemEvents(name: string, refresh: boolean) {
-    if (inFlightSystems.current.has(name)) return;
-    inFlightSystems.current.add(name);
-    setLoadingSystems((prev) => new Set(prev).add(name));
+  async function loadCollectionEvents(
+    kind: CollectionKind,
+    name: string,
+    refresh: boolean,
+  ) {
+    const key = collectionKey(kind, name);
+    if (inFlightCollections.current.has(key)) return;
+    inFlightCollections.current.add(key);
+    setLoadingCollections((prev) => new Set(prev).add(key));
     try {
-      const result = await fetchSystemEvents(name, refresh);
-      setEvents((prev) => [
-        ...prev.filter((e) => e.gameSystem !== name),
-        ...result.events,
-      ]);
-      setSystemsMeta((prev) =>
-        new Map(prev).set(name, {
-          fetchedAt: result.fetchedAt,
-          stale: result.stale,
-        }));
+      const collection = await fetchCollection(kind, name, refresh);
+      setCollections((prev) => new Map(prev).set(key, collection));
       setSystemError(null);
     } catch (e: unknown) {
       setSystemError(e instanceof Error ? e.message : String(e));
     } finally {
-      inFlightSystems.current.delete(name);
-      setLoadingSystems((prev) => {
+      inFlightCollections.current.delete(key);
+      setLoadingCollections((prev) => {
         const next = new Set(prev);
-        next.delete(name);
+        next.delete(key);
         return next;
       });
     }
   }
 
-  function loadSystem(name: string) {
-    return loadSystemEvents(name, false);
+  function loadCollection(kind: CollectionKind, name: string) {
+    return loadCollectionEvents(kind, name, false);
   }
 
-  function refreshSystem(name: string) {
-    return loadSystemEvents(name, true);
+  function refreshCollection(kind: CollectionKind, name: string) {
+    return loadCollectionEvents(kind, name, true);
   }
 
-  function refreshCatalog() {
+  function refreshCatalogs() {
     fetchSystems(true)
       .then(({ systems }) => {
-        setCatalog(systems);
+        setGameCatalog(systems);
+        setSystemError(null);
+      })
+      .catch((e: unknown) => {
+        setSystemError(e instanceof Error ? e.message : String(e));
+      });
+    fetchCategories(true)
+      .then(({ categories }) => {
+        setCategoryCatalog(categories);
         setSystemError(null);
       })
       .catch((e: unknown) => {
         setSystemError(e instanceof Error ? e.message : String(e));
       });
   }
+
+  // Flattened, id-deduped event list derived from all loaded collections.
+  // An event can appear in both a game and a category collection — keep one.
+  const events = useMemo(() => {
+    const byId = new Map<number, GenConEvent>();
+    for (const collection of collections.values()) {
+      for (const e of collection.events) {
+        if (!byId.has(e.id)) byId.set(e.id, e);
+      }
+    }
+    return [...byId.values()];
+  }, [collections]);
 
   const eventsById = useMemo(() => {
     const m = new Map<number, GenConEvent>();
@@ -291,7 +322,7 @@ export default function App() {
           <h1>Gen Con Planner</h1>
           {!dataLoading && !loadError && (
             <span className="dataset-meta">
-              {events.length} events · {systemsMeta.size} systems
+              {events.length} events · {collections.size} collections
             </span>
           )}
         </div>
@@ -317,7 +348,8 @@ export default function App() {
 
       {!dataLoading && !loadError && events.length === 0 && (
         <div className="banner">
-          No event data yet — pick a game system in Search to fetch it.
+          No event data yet — pick a game system or event type in Search to
+          fetch it.
         </div>
       )}
 
@@ -334,9 +366,10 @@ export default function App() {
               events={events}
               rankById={rankById}
               wishlistIds={wishlistIds}
-              catalog={catalog}
-              systemsMeta={systemsMeta}
-              loadingSystems={loadingSystems}
+              gameCatalog={gameCatalog}
+              categoryCatalog={categoryCatalog}
+              collections={collections}
+              loadingCollections={loadingCollections}
               systemError={systemError}
               slotSearch={slotSearch}
               onAdd={addToWishlist}
@@ -345,9 +378,9 @@ export default function App() {
               onMatchIds={setActiveMatchIds}
               onClearSlotSearch={() => setSlotSearch(null)}
               onCollapse={() => setSearchCollapsed(true)}
-              onLoadSystem={loadSystem}
-              onRefreshSystem={refreshSystem}
-              onRefreshCatalog={refreshCatalog}
+              onLoadCollection={loadCollection}
+              onRefreshCollection={refreshCollection}
+              onRefreshCatalogs={refreshCatalogs}
             />
           )}
           <AgendaView

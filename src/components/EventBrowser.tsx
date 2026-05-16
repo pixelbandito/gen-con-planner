@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { GenConEvent, SlotSearch, SystemCatalogEntry } from '../types';
+import type {
+  CatalogEntry,
+  Collection,
+  CollectionKind,
+  GenConEvent,
+  SlotSearch,
+} from '../types';
 import {
   fmtDateTime,
   fmtDayLabel,
@@ -10,18 +16,14 @@ import {
 import { fmtCost, gameClass } from '../lib/style';
 import { eventInterval } from '../lib/schedule';
 
-interface SystemMeta {
-  fetchedAt: string;
-  stale: boolean;
-}
-
 interface Props {
   events: GenConEvent[];
   rankById: Map<number, number>;
   wishlistIds: Set<number>;
-  catalog: SystemCatalogEntry[];
-  systemsMeta: Map<string, SystemMeta>;
-  loadingSystems: Set<string>;
+  gameCatalog: CatalogEntry[];
+  categoryCatalog: CatalogEntry[];
+  collections: Map<string, Collection>;
+  loadingCollections: Set<string>;
   systemError: string | null;
   slotSearch: SlotSearch;
   onAdd: (id: number) => void;
@@ -30,12 +32,17 @@ interface Props {
   onMatchIds: (ids: Set<number>) => void;
   onClearSlotSearch: () => void;
   onCollapse: () => void;
-  onLoadSystem: (name: string) => void;
-  onRefreshSystem: (name: string) => void;
-  onRefreshCatalog: () => void;
+  onLoadCollection: (kind: CollectionKind, name: string) => void;
+  onRefreshCollection: (kind: CollectionKind, name: string) => void;
+  onRefreshCatalogs: () => void;
 }
 
 const RESULT_CAP = 300;
+
+/** Stable key for a collection, matching App's `collections` map keys. */
+function collectionKey(kind: CollectionKind, name: string): string {
+  return `${kind}::${name}`;
+}
 
 /** Readable local-ish label for a raw timezone-agnostic millis value. */
 function fmtMs(ms: number): string {
@@ -59,9 +66,10 @@ export function EventBrowser({
   events,
   rankById,
   wishlistIds,
-  catalog,
-  systemsMeta,
-  loadingSystems,
+  gameCatalog,
+  categoryCatalog,
+  collections,
+  loadingCollections,
   systemError,
   slotSearch,
   onAdd,
@@ -70,9 +78,9 @@ export function EventBrowser({
   onMatchIds,
   onClearSlotSearch,
   onCollapse,
-  onLoadSystem,
-  onRefreshSystem,
-  onRefreshCatalog,
+  onLoadCollection,
+  onRefreshCollection,
+  onRefreshCatalogs,
 }: Props) {
   const [text, setText] = useState('');
   const [gameSystem, setGameSystem] = useState('');
@@ -84,27 +92,48 @@ export function EventBrowser({
 
   const [manageOpen, setManageOpen] = useState(false);
 
-  // The system picker is catalog-driven; if the catalog has not loaded yet it
-  // falls back to whichever systems are already cached/loaded.
-  const systemOptions = useMemo(() => {
+  // A picker is catalog-driven; if its catalog has not loaded yet it falls
+  // back to whichever collections of that kind are already loaded.
+  function catalogOptions(
+    kind: CollectionKind,
+    catalog: CatalogEntry[],
+  ): CatalogEntry[] {
     if (catalog.length > 0) {
       return [...catalog].sort((a, b) => a.name.localeCompare(b.name));
     }
-    return [...systemsMeta.keys()]
-      .sort()
-      .map((name) => ({ name, eventCount: 0 }));
-  }, [catalog, systemsMeta]);
-
-  // Sorted list of loaded systems for the cache-management section.
-  const loadedSystems = useMemo(
-    () => [...systemsMeta.keys()].sort(),
-    [systemsMeta],
+    return [...collections.values()]
+      .filter((c) => c.kind === kind)
+      .map((c) => ({ name: c.name, eventCount: c.events.length }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+  const systemOptions = useMemo(
+    () => catalogOptions('game', gameCatalog),
+    [gameCatalog, collections],
+  );
+  const categoryOptions = useMemo(
+    () => catalogOptions('category', categoryCatalog),
+    [categoryCatalog, collections],
   );
 
-  const eventTypes = useMemo(
-    () => [...new Set(events.map((e) => e.eventType).filter(Boolean))].sort(),
-    [events],
+  // Loaded collections (both kinds), sorted, for the cache-management section.
+  const loadedCollections = useMemo(
+    () =>
+      [...collections.values()].sort(
+        (a, b) =>
+          a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name),
+      ),
+    [collections],
   );
+
+  // Event ids belonging to any stale loaded collection — drives the stale tag.
+  const staleEventIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const c of collections.values()) {
+      if (c.stale) for (const e of c.events) ids.add(e.id);
+    }
+    return ids;
+  }, [collections]);
+
   const days = useMemo(() => {
     const keys = new Set<string>();
     for (const e of events) {
@@ -193,14 +222,28 @@ export function EventBrowser({
 
   const shown = filtered.slice(0, RESULT_CAP);
 
-  // Selecting a system filters the list and, if that system has not yet been
-  // loaded, kicks off a live fetch through the proxy.
+  // Selecting a system/category filters the list and, if that collection has
+  // not yet been loaded, kicks off a live fetch through the proxy.
   function handleSystemChange(name: string) {
     setGameSystem(name);
-    if (name && !systemsMeta.has(name)) onLoadSystem(name);
+    if (name && !collections.has(collectionKey('game', name))) {
+      onLoadCollection('game', name);
+    }
   }
 
-  const selectedLoading = gameSystem !== '' && loadingSystems.has(gameSystem);
+  function handleCategoryChange(name: string) {
+    setEventType(name);
+    if (name && !collections.has(collectionKey('category', name))) {
+      onLoadCollection('category', name);
+    }
+  }
+
+  const systemLoading =
+    gameSystem !== '' &&
+    loadingCollections.has(collectionKey('game', gameSystem));
+  const categoryLoading =
+    eventType !== '' &&
+    loadingCollections.has(collectionKey('category', eventType));
 
   return (
     <section className="pane pane-browser">
@@ -233,7 +276,7 @@ export function EventBrowser({
         >
           <option value="">All game systems</option>
           {systemOptions.map((s) => {
-            const loaded = systemsMeta.has(s.name);
+            const loaded = collections.has(collectionKey('game', s.name));
             const count = s.eventCount > 0 ? ` (${s.eventCount})` : '';
             return (
               <option key={s.name} value={s.name}>
@@ -242,15 +285,27 @@ export function EventBrowser({
             );
           })}
         </select>
-        {selectedLoading && (
+        {systemLoading && (
           <div className="system-loading">Loading {gameSystem}…</div>
         )}
-        <select value={eventType} onChange={(e) => setEventType(e.target.value)}>
+        <select
+          value={eventType}
+          onChange={(e) => handleCategoryChange(e.target.value)}
+        >
           <option value="">All event types</option>
-          {eventTypes.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
+          {categoryOptions.map((t) => {
+            const loaded = collections.has(collectionKey('category', t.name));
+            const count = t.eventCount > 0 ? ` (${t.eventCount})` : '';
+            return (
+              <option key={t.name} value={t.name}>
+                {loaded ? '✓ ' : ''}{t.name}{count}
+              </option>
+            );
+          })}
         </select>
+        {categoryLoading && (
+          <div className="system-loading">Loading {eventType}…</div>
+        )}
         <select value={day} onChange={(e) => setDay(e.target.value)}>
           <option value="">All days</option>
           {days.map((d) => (
@@ -290,33 +345,37 @@ export function EventBrowser({
           aria-expanded={manageOpen}
         >
           <span className="manage-caret">{manageOpen ? '▾' : '▸'}</span>
-          Loaded data ({loadedSystems.length})
+          Loaded data ({loadedCollections.length})
         </button>
         {manageOpen && (
           <div className="manage-body">
-            {loadedSystems.length === 0 ? (
+            {loadedCollections.length === 0 ? (
               <div className="list-note">
-                No game systems loaded yet — pick one above to fetch it.
+                Nothing loaded yet — pick a game system or event type above to
+                fetch it.
               </div>
             ) : (
               <ul className="cache-list">
-                {loadedSystems.map((name) => {
-                  const meta = systemsMeta.get(name)!;
-                  const busy = loadingSystems.has(name);
+                {loadedCollections.map((c) => {
+                  const key = collectionKey(c.kind, c.name);
+                  const busy = loadingCollections.has(key);
                   return (
-                    <li key={name} className="cache-row">
+                    <li key={key} className="cache-row">
                       <div className="cache-row-main">
-                        <span className="cache-name">{name}</span>
-                        {meta.stale && (
+                        <span className="cache-kind">
+                          {c.kind === 'category' ? 'type' : 'game'}
+                        </span>
+                        <span className="cache-name">{c.name}</span>
+                        {c.stale && (
                           <span className="stale-badge">stale</span>
                         )}
                         <span className="cache-time">
-                          {fmtRelative(meta.fetchedAt)}
+                          {fmtRelative(c.fetchedAt)}
                         </span>
                       </div>
                       <button
                         className="btn btn-mini"
-                        onClick={() => onRefreshSystem(name)}
+                        onClick={() => onRefreshCollection(c.kind, c.name)}
                         disabled={busy}
                       >
                         {busy ? 'Refreshing…' : 'Refresh'}
@@ -326,8 +385,8 @@ export function EventBrowser({
                 })}
               </ul>
             )}
-            <button className="btn btn-mini" onClick={onRefreshCatalog}>
-              Refresh catalog
+            <button className="btn btn-mini" onClick={onRefreshCatalogs}>
+              Refresh catalogs
             </button>
             {systemError && (
               <div className="list-note list-note-error">
@@ -354,7 +413,7 @@ export function EventBrowser({
         )}
         {shown.map((e) => {
           const inList = wishlistIds.has(e.id);
-          const stale = systemsMeta.get(e.gameSystem)?.stale ?? false;
+          const stale = staleEventIds.has(e.id);
           return (
             <div key={e.id} className={`event-row ${gameClass(e.gameSystem)}`}>
               <div className="event-row-main" onClick={() => onSelect(e.id)}>

@@ -26,15 +26,22 @@ export interface GenConEvent {
   dupKey: string;
 }
 
-/** One entry in the GenCon game-system catalog. */
-export interface SystemCatalogEntry {
+/** One entry in a GenCon catalog (game systems or event categories). */
+export interface CatalogEntry {
   name: string;
   eventCount: number;
 }
 
-/** A single game system's events as cached by the GenCon proxy. */
-export interface CachedSystem {
-  gameSystem: string;
+/** Which cacheable axis a collection belongs to. */
+export type CollectionKind = 'game' | 'category';
+
+/**
+ * One cacheable fetch unit as served by the GenCon proxy: all events for a
+ * single game system (`kind:'game'`) or event category (`kind:'category'`).
+ */
+export interface Collection {
+  kind: CollectionKind;
+  name: string;
   fetchedAt: string;
   stale: boolean;
   events: GenConEvent[];
