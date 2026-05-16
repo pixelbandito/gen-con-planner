@@ -127,6 +127,9 @@ export function AgendaView({
   const [pxPerMin, setPxPerMin] = useState(1);
 
   // ---- slot drag state (Task 6) ----
+  // Known, intentional edge case: if a drag is released over an event block
+  // (which stops mouseup propagation), this anchor ref is never cleared and
+  // simply lingers until the next slot interaction overwrites it — harmless.
   const dragAnchor = useRef<number | null>(null);
   const [dragRange, setDragRange] = useState<[number, number] | null>(null);
 
@@ -202,9 +205,9 @@ export function AgendaView({
       : allDays.slice(clampedOffset, clampedOffset + dayCount);
 
   // Clamp the data-driven time bounds into the selected time-of-day window.
-  const window = TIME_WINDOWS[timeView];
-  const viewMinHour = window ? Math.max(minHour, window[0]) : minHour;
-  const viewMaxHour = window ? Math.min(maxHour, window[1]) : maxHour;
+  const timeWindow = TIME_WINDOWS[timeView];
+  const viewMinHour = timeWindow ? Math.max(minHour, timeWindow[0]) : minHour;
+  const viewMaxHour = timeWindow ? Math.min(maxHour, timeWindow[1]) : maxHour;
   // Guard against an inverted range (e.g. evening-only data, morning view).
   const lowHour = Math.min(viewMinHour, viewMaxHour);
   const highHour = Math.max(viewMinHour, viewMaxHour);
@@ -224,7 +227,7 @@ export function AgendaView({
   const canPanFwd = daysShown !== 'all' && clampedOffset < maxOffset;
 
   function panBy(delta: -1 | 1) {
-    setDayOffset((o) => Math.min(maxOffset, Math.max(0, o + delta)));
+    setDayOffset(Math.min(maxOffset, Math.max(0, clampedOffset + delta)));
   }
 
   function changeDensity(delta: -1 | 1) {
