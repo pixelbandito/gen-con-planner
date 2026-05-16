@@ -150,10 +150,10 @@ export default function App() {
   }
 
   // Cross-pane state lifted now, consumed by Search/Wishlist in later units
-  // (match highlight, collapsible panes). Referenced here so the
-  // lifted-but-not-yet-wired bindings stay live under noUnusedLocals.
+  // (match highlight in Unit 5, collapsible panes in Unit 6). Referenced here
+  // so the lifted-but-not-yet-wired bindings stay live under noUnusedLocals.
   void [
-    activeMatchIds, setActiveMatchIds,
+    activeMatchIds,
     searchCollapsed,
     wishlistCollapsed, setWishlistCollapsed,
   ];
@@ -203,9 +203,14 @@ export default function App() {
             events={dataset.events}
             rankById={rankById}
             wishlistIds={wishlistIds}
+            gameSystems={dataset.gameSystems}
+            scrapedAt={dataset.scrapedAt}
+            slotSearch={slotSearch}
             onAdd={addToWishlist}
             onRemove={removeFromWishlist}
             onSelect={setSelectedId}
+            onMatchIds={setActiveMatchIds}
+            onClearSlotSearch={() => setSlotSearch(null)}
           />
           <AgendaView
             entries={wishlist.entries}
