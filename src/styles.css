@@ -172,6 +172,31 @@ code {
   background: #fff;
   color: var(--ink);
 }
+/* Leave room for the clear button when a value is selected. */
+.searchable-select-input.has-clear { padding-right: 28px; }
+.searchable-select-clear {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.searchable-select-clear:hover {
+  background: #e2e5ec;
+  color: var(--ink);
+}
 .searchable-select-list {
   position: absolute;
   top: calc(100% + 2px);
