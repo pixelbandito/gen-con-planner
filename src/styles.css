@@ -509,6 +509,120 @@ code {
   font: inherit;
 }
 .range-dash { color: var(--ink-soft); }
+
+/* ---- dual-thumb range slider ---- */
+.range-slider {
+  position: relative;
+  flex: 1;
+  min-width: 120px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+.range-slider-track,
+.range-slider-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 999px;
+}
+.range-slider-track {
+  background: var(--line);
+}
+.range-slider-fill {
+  background: var(--accent);
+}
+/* Both inputs overlap the same track. Their visible chrome (track) is hidden;
+   only the thumbs show. pointer-events on the wrapper input are off so clicks
+   reach the thumbs, which re-enable them. */
+.range-slider-input {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  margin: 0;
+  height: 20px;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  cursor: pointer;
+}
+.range-slider-input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  cursor: pointer;
+}
+.range-slider-input:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.range-slider-input:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- layer split-button chooser ---- */
+.layer-chooser { position: relative; flex: none; }
+.layer-split { display: flex; }
+.layer-split .btn { border-radius: 0; }
+.layer-split .layer-step:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.layer-split .layer-step:last-child {
+  border-radius: 0 6px 6px 0;
+}
+.layer-split .btn + .btn { border-left: none; }
+.layer-current {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+.layer-caret { font-size: 9px; }
+.layer-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  min-width: 100%;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(20, 24, 33, 0.16);
+}
+.layer-menu-option {
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.layer-menu-option:hover {
+  background: color-mix(in srgb, var(--accent) 14%, #fff);
+  color: var(--accent);
+}
+.layer-menu-option.is-selected { font-weight: 600; }
+
 .hidden-chip {
   margin-left: auto;
   font: inherit;

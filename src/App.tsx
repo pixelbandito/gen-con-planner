@@ -67,9 +67,12 @@ export default function App() {
   const [hiddenIds, setHiddenIds] = useState(() => new Set<number>());
   const [slotSearch, setSlotSearch] = useState<SlotSearch>(null);
   const [activeMatchIds, setActiveMatchIds] = useState(() => new Set<number>());
+  // Range mode covering the whole wishlist is the default ("all"). 300 is the
+  // wishlist rank cap, so [1, 300] always spans every wishlisted event.
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>({
-    mode: 'layer',
-    layer: 1,
+    mode: 'range',
+    a: 1,
+    b: 300,
   });
   const [searchCollapsed, setSearchCollapsed] = useState(false);
   const [wishlistCollapsed, setWishlistCollapsed] = useState(false);
@@ -482,6 +485,7 @@ export default function App() {
             entries={wishlist.entries}
             eventsById={eventsById}
             layers={agendaLayers}
+            wishlistLength={wishlist.entries.length}
             hiddenIds={hiddenIds}
             rankById={rankById}
             priorityFilter={priorityFilter}

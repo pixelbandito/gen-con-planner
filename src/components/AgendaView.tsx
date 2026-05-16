@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   GenConEvent,
   PriorityFilter,
@@ -10,11 +10,13 @@ import { rangeItems } from '../lib/schedule';
 import { fmtDayLabel, fmtHour, fmtTime, parseWall } from '../lib/time';
 import type { WallTime } from '../lib/time';
 import { gameClass } from '../lib/style';
+import { RangeSlider } from './RangeSlider';
 
 interface Props {
   entries: WishlistEntry[];
   eventsById: Map<number, GenConEvent>;
   layers: Layer[];
+  wishlistLength: number;
   hiddenIds: Set<number>;
   rankById: Map<number, number>;
   priorityFilter: PriorityFilter;
@@ -110,10 +112,18 @@ function slotTs(dayKey: string, hour: number, minute: number): number {
   return Date.UTC(y, mo - 1, d, hour, minute);
 }
 
+/** Human-readable label for a cascade layer, reused by chooser and dropdown. */
+function layerLabel(layer: Layer): string {
+  return layer.index === 1
+    ? `L${layer.index} · Top choices`
+    : `L${layer.index} · from #${layer.startRank}`;
+}
+
 export function AgendaView({
   entries,
   eventsById,
   layers,
+  wishlistLength,
   hiddenIds,
   rankById,
   priorityFilter,
@@ -130,6 +140,10 @@ export function AgendaView({
   const [dayOffset, setDayOffset] = useState(0);
   const [timeView, setTimeView] = useState<TimeView>('all');
   const [pxPerMin, setPxPerMin] = useState(1);
+
+  // ---- layer-chooser split-button dropdown ----
+  const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+  const layerChooserRef = useRef<HTMLDivElement | null>(null);
 
   // ---- slot drag state (Task 6) ----
   // Known, intentional edge case: if a drag is released over an event block
@@ -312,6 +326,25 @@ export function AgendaView({
     };
   }
 
+  // Close the layer dropdown on outside click or Escape.
+  useEffect(() => {
+    if (!layerMenuOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (!layerChooserRef.current?.contains(e.target as Node)) {
+        setLayerMenuOpen(false);
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setLayerMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [layerMenuOpen]);
+
   return (
     <section className="pane pane-agenda">
       <div className="pane-head">
@@ -407,23 +440,78 @@ export function AgendaView({
         </div>
 
         {priorityFilter.mode === 'layer' ? (
-          <div className="priority-segments">
-            {layers.map((layer) => (
-              <button
-                key={layer.index}
-                className={`btn btn-mini ${
-                  priorityFilter.layer === layer.index ? 'is-active' : ''
-                }`}
-                onClick={() =>
-                  onPriorityFilter({ mode: 'layer', layer: layer.index })
-                }
-              >
-                {layer.index === 1
-                  ? `L${layer.index} · Top choices`
-                  : `L${layer.index} · from #${layer.startRank}`}
-              </button>
-            ))}
-          </div>
+          (() => {
+            const currentLayer = priorityFilter.layer;
+            const lastLayer = Math.max(1, layers.length);
+            const active =
+              layers.find((l) => l.index === currentLayer) ?? layers[0];
+            return (
+              <div className="priority-segments">
+                <div className="layer-chooser" ref={layerChooserRef}>
+                  <div className="layer-split">
+                    <button
+                      className="btn btn-mini layer-step"
+                      onClick={() =>
+                        onPriorityFilter({
+                          mode: 'layer',
+                          layer: currentLayer - 1,
+                        })
+                      }
+                      disabled={currentLayer <= 1}
+                      aria-label="Previous layer"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      className="btn btn-mini layer-current"
+                      onClick={() => setLayerMenuOpen((o) => !o)}
+                      aria-haspopup="listbox"
+                      aria-expanded={layerMenuOpen}
+                    >
+                      {active ? layerLabel(active) : `L${currentLayer}`}
+                      <span className="layer-caret">▾</span>
+                    </button>
+                    <button
+                      className="btn btn-mini layer-step"
+                      onClick={() =>
+                        onPriorityFilter({
+                          mode: 'layer',
+                          layer: currentLayer + 1,
+                        })
+                      }
+                      disabled={currentLayer >= lastLayer}
+                      aria-label="Next layer"
+                    >
+                      ›
+                    </button>
+                  </div>
+                  {layerMenuOpen && (
+                    <ul className="layer-menu" role="listbox">
+                      {layers.map((layer) => (
+                        <li
+                          key={layer.index}
+                          className={`layer-menu-option ${
+                            layer.index === currentLayer ? 'is-selected' : ''
+                          }`}
+                          role="option"
+                          aria-selected={layer.index === currentLayer}
+                          onClick={() => {
+                            onPriorityFilter({
+                              mode: 'layer',
+                              layer: layer.index,
+                            });
+                            setLayerMenuOpen(false);
+                          }}
+                        >
+                          {layerLabel(layer)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            );
+          })()
         ) : (
           <div className="priority-range">
             <label className="range-field">
@@ -461,6 +549,15 @@ export function AgendaView({
                 }}
               />
             </label>
+            <RangeSlider
+              min={1}
+              max={Math.max(wishlistLength, 1)}
+              low={rangeA}
+              high={rangeB}
+              onChange={(low, high) =>
+                onPriorityFilter({ mode: 'range', a: low, b: high })
+              }
+            />
           </div>
         )}
 
