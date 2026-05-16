@@ -31,7 +31,11 @@ export function fetchCachedEvents(): Promise<{ collections: Collection[] }> {
   return getJson<{ collections: Collection[] }>('/api/gencon/events');
 }
 
-/** GET /api/gencon/events?game=NAME or ?category=NAME — one collection. */
+/**
+ * GET /api/gencon/events?game=NAME, ?category=NAME, or ?search=TEXT — one
+ * collection. The query param name is the collection kind, so adding a kind
+ * needs no change here.
+ */
 export function fetchCollection(
   kind: CollectionKind,
   name: string,

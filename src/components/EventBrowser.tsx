@@ -269,6 +269,17 @@ export function EventBrowser({
     eventType !== '' &&
     loadingCollections.has(collectionKey('category', eventType));
 
+  // Run a free-text GenCon search: fetch a `search` collection through the
+  // proxy and merge it into the event pool. The local substring filter is
+  // unaffected and keeps applying to the merged result.
+  const searchQuery = text.trim();
+  const searchLoading =
+    searchQuery !== '' &&
+    loadingCollections.has(collectionKey('search', searchQuery));
+  function runGenconSearch() {
+    if (searchQuery !== '') onLoadCollection('search', searchQuery);
+  }
+
   return (
     <section className="pane pane-browser">
       <div className="pane-head">
@@ -287,13 +298,29 @@ export function EventBrowser({
       </div>
 
       <div className="filters">
-        <input
-          className="filter-text"
-          type="search"
-          placeholder="Search title, sponsor, code…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
+        <div className="text-search">
+          <input
+            className="filter-text"
+            type="search"
+            placeholder="Search title, sponsor, code…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') runGenconSearch();
+            }}
+          />
+          <button
+            className="btn btn-search"
+            onClick={runGenconSearch}
+            disabled={searchQuery === '' || searchLoading}
+            title="Fetch matching events from Gen Con"
+          >
+            {searchLoading ? 'Searching…' : 'Search Gen Con'}
+          </button>
+        </div>
+        {searchLoading && (
+          <div className="system-loading">Searching Gen Con for “{searchQuery}”…</div>
+        )}
         <SearchableSelect
           value={gameSystem}
           options={systemSelectOptions}
@@ -378,8 +405,12 @@ export function EventBrowser({
                   return (
                     <li key={key} className="cache-row">
                       <div className="cache-row-main">
-                        <span className="cache-kind">
-                          {c.kind === 'category' ? 'type' : 'game'}
+                        <span className={`cache-kind cache-kind-${c.kind}`}>
+                          {c.kind === 'category'
+                            ? 'type'
+                            : c.kind === 'search'
+                              ? 'search'
+                              : 'game'}
                         </span>
                         <span className="cache-name">{c.name}</span>
                         {c.stale && (

@@ -170,3 +170,8 @@ export function fetchEvents(gameSystem) {
 export function fetchCategoryEvents(category) {
   return fetchAllEvents('category[]', category);
 }
+
+/** Page through event_search for one free-text query. */
+export function fetchSearchEvents(query) {
+  return fetchAllEvents('search', query);
+}

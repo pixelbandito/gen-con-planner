@@ -158,6 +158,22 @@ code {
 }
 .check input { margin: 0; }
 
+/* text filter + "Search Gen Con" action on one row */
+.text-search {
+  display: flex;
+  gap: 6px;
+}
+.text-search .filter-text { flex: 1; min-width: 0; }
+.btn-search {
+  flex: none;
+  white-space: nowrap;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-search:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+}
+
 /* ---- searchable-select combobox ---- */
 .searchable-select {
   position: relative;
@@ -303,6 +319,11 @@ code {
   border-radius: 4px;
   background: #e4e9fb;
   color: #324bb0;
+}
+/* free-text search collections get a distinct tag color */
+.cache-kind-search {
+  background: #d8efe1;
+  color: #1f7d47;
 }
 .cache-time { color: var(--ink-soft); flex: none; }
 

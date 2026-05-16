@@ -5,12 +5,13 @@
 //   GET /api/gencon/categories           - event-category catalog
 //   GET /api/gencon/events?game=NAME     - events for one game system
 //   GET /api/gencon/events?category=NAME - events for one event category
+//   GET /api/gencon/events?search=TEXT   - events for a free-text query
 //   GET /api/gencon/events               - all cached collections (seeds from
 //                                          seed/events.json if empty)
 // `?refresh=1` forces a live re-fetch. Cache lives under cache/ (gitignored).
 //
 // A "collection" is one cacheable fetch unit: { kind, name, fetchedAt, events }
-// where kind is 'game' or 'category'. Cache files are
+// where kind is 'game', 'category', or 'search'. Cache files are
 // cache/events/<kind>-<slug>.json.
 
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
@@ -22,9 +23,14 @@ import {
   fetchCategoryEvents,
   fetchEvents,
   fetchGameSystems,
+  fetchSearchEvents,
   isStale,
   slugify,
 } from './gencon.mjs';
+
+// Cap a slug used in a cache filename. A free-text search query can be long;
+// truncating keeps `cache/events/search-<slug>.json` a valid filename.
+const MAX_SLUG_LEN = 100;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE_DIR = join(ROOT, 'cache');
@@ -78,9 +84,14 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+/** Length-capped slug, stripping any trailing dash left by truncation. */
+function cacheSlug(name) {
+  return slugify(name).slice(0, MAX_SLUG_LEN).replace(/-+$/, '');
+}
+
 /** Cache file path for one collection. */
 function collectionPath(kind, name) {
-  return join(EVENTS_CACHE_DIR, `${kind}-${slugify(name)}.json`);
+  return join(EVENTS_CACHE_DIR, `${kind}-${cacheSlug(name)}.json`);
 }
 
 /** Normalize a read cache entry into a collection (missing kind → 'game'). */
@@ -123,15 +134,19 @@ async function handleCategories(res, refresh) {
   });
 }
 
+/** Fetch events for one collection by kind. */
+function fetchByKind(kind, name) {
+  if (kind === 'category') return fetchCategoryEvents(name);
+  if (kind === 'search') return fetchSearchEvents(name);
+  return fetchEvents(name);
+}
+
 /** Fetch + cache one collection (deduped via the in-flight map). */
 async function loadCollection(kind, name) {
-  const key = `${kind}-${slugify(name)}`;
+  const key = `${kind}-${cacheSlug(name)}`;
   if (inFlight.has(key)) return inFlight.get(key);
   const promise = (async () => {
-    const events =
-      kind === 'category'
-        ? await fetchCategoryEvents(name)
-        : await fetchEvents(name);
+    const events = await fetchByKind(kind, name);
     const entry = {
       kind,
       name,
@@ -149,7 +164,7 @@ async function loadCollection(kind, name) {
   }
 }
 
-/** GET /api/gencon/events?game=NAME or ?category=NAME */
+/** GET /api/gencon/events?game=NAME, ?category=NAME, or ?search=TEXT */
 async function handleCollection(res, kind, name, refresh) {
   let entry = refresh ? null : await readJson(collectionPath(kind, name));
   if (!entry) {
@@ -244,10 +259,17 @@ async function middleware(req, res, next) {
     if (url.pathname === '/api/gencon/events') {
       const game = url.searchParams.get('game');
       const category = url.searchParams.get('category');
+      const search = url.searchParams.get('search');
       if (game) {
         await handleCollection(res, 'game', game, refresh);
       } else if (category) {
         await handleCollection(res, 'category', category, refresh);
+      } else if (search !== null) {
+        if (search.trim() === '') {
+          sendJson(res, 400, { error: 'search query must not be empty' });
+        } else {
+          await handleCollection(res, 'search', search.trim(), refresh);
+        }
       } else {
         await handleAllEvents(res);
       }
