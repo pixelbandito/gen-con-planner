@@ -113,6 +113,25 @@ export default function App() {
     });
   }
 
+  function reorderEntry(fromIndex: number, toIndex: number) {
+    setWishlist((w) => {
+      const n = w.entries.length;
+      if (
+        fromIndex === toIndex ||
+        fromIndex < 0 ||
+        fromIndex >= n ||
+        toIndex < 0 ||
+        toIndex >= n
+      ) {
+        return w;
+      }
+      const entries = w.entries.slice();
+      const [moved] = entries.splice(fromIndex, 1);
+      entries.splice(toIndex, 0, moved);
+      return { ...w, entries };
+    });
+  }
+
   function setNote(id: number, note: string) {
     setWishlist((w) => ({
       ...w,
@@ -150,10 +169,9 @@ export default function App() {
   }
 
   // Cross-pane state lifted now, consumed by Search/Wishlist in later units
-  // (match highlight in Unit 5, collapsible panes in Unit 6). Referenced here
-  // so the lifted-but-not-yet-wired bindings stay live under noUnusedLocals.
+  // (collapsible panes in Unit 6). Referenced here so the lifted-but-not-yet-
+  // wired bindings stay live under noUnusedLocals.
   void [
-    activeMatchIds,
     searchCollapsed,
     wishlistCollapsed, setWishlistCollapsed,
   ];
@@ -233,7 +251,9 @@ export default function App() {
             fullResult={fullResult}
             rankById={rankById}
             hedges={hedges}
+            activeMatchIds={activeMatchIds}
             onMove={moveEntry}
+            onReorder={reorderEntry}
             onRemove={removeFromWishlist}
             onNote={setNote}
             onSelect={setSelectedId}

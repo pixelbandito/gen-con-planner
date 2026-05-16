@@ -544,6 +544,49 @@ code {
 }
 .wish-row.is-bumped { background: #fbf4ea; }
 .wish-row.is-missing { background: #fbe9e9; }
+.wish-row.is-past-limit { opacity: 0.55; }
+.wish-row.is-match {
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+  border-left-color: var(--accent);
+  border-left-width: 4px;
+}
+.wish-row.is-drop-target {
+  box-shadow: inset 0 3px 0 -1px var(--accent);
+}
+
+/* drag handle */
+.wish-grip {
+  flex: none;
+  align-self: flex-start;
+  padding: 2px 2px 4px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: grab;
+  user-select: none;
+}
+.wish-grip:hover { color: var(--accent); }
+.wish-grip:active { cursor: grabbing; }
+
+/* submission-limit divider */
+.wish-limit-divider {
+  padding: 6px 12px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  background: #f7f8fa;
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+}
+
+/* Gen Con game code */
+.wish-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
 .wish-rank {
   font-weight: 700;
   font-size: 15px;
