@@ -1,0 +1,72 @@
+// Time helpers.
+//
+// Gen Con timestamps look like "2026-07-29T17:00:00.000-04:00". The offset is
+// always Indianapolis-local. We parse the wall-clock portion directly and
+// display it as-is, so times are correct regardless of the user's timezone.
+
+const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export interface WallTime {
+  y: number;
+  mo: number;
+  d: number;
+  h: number;
+  mi: number;
+  /** Date.UTC-based millis — timezone-agnostic, safe for ordering/overlap. */
+  ts: number;
+  /** "YYYY-MM-DD" */
+  dayKey: string;
+  /** Minutes since midnight. */
+  minOfDay: number;
+}
+
+export function parseWall(iso: string | null | undefined): WallTime | null {
+  if (!iso) return null;
+  const m = ISO_RE.exec(iso);
+  if (!m) return null;
+  const y = +m[1];
+  const mo = +m[2];
+  const d = +m[3];
+  const h = +m[4];
+  const mi = +m[5];
+  return {
+    y, mo, d, h, mi,
+    ts: Date.UTC(y, mo - 1, d, h, mi),
+    dayKey: `${m[1]}-${m[2]}-${m[3]}`,
+    minOfDay: h * 60 + mi,
+  };
+}
+
+export function fmtTime(w: WallTime): string {
+  const ampm = w.h < 12 ? 'AM' : 'PM';
+  const hr = w.h % 12 === 0 ? 12 : w.h % 12;
+  return `${hr}:${String(w.mi).padStart(2, '0')} ${ampm}`;
+}
+
+/** Format an hour-of-day label, tolerating values past 24 (overnight). */
+export function fmtHour(hour: number): string {
+  const hh = ((hour % 24) + 24) % 24;
+  const ampm = hh < 12 ? 'AM' : 'PM';
+  const hr = hh % 12 === 0 ? 12 : hh % 12;
+  return `${hr} ${ampm}`;
+}
+
+export function fmtDayLabel(dayKey: string): string {
+  const [y, mo, d] = dayKey.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+  return `${DOW[dow]} ${MONTHS[mo - 1]} ${d}`;
+}
+
+export function fmtDateTime(
+  start: string | null,
+  end: string | null,
+): string {
+  const s = parseWall(start);
+  if (!s) return 'Time TBD';
+  const e = parseWall(end);
+  const base = `${fmtDayLabel(s.dayKey)} · ${fmtTime(s)}`;
+  return e ? `${base} – ${fmtTime(e)}` : base;
+}
