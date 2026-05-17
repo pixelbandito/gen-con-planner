@@ -47,15 +47,30 @@ go to **System Settings → Privacy & Security**, scroll to the Security section
 where it names the blocked app, and click **"Open Anyway"** (re-confirm, and
 enter an admin password if asked). After that first time it opens normally.
 
-Windows and Linux installers are not cross-built from macOS — they are produced
-by the **`desktop-build` GitHub Actions workflow**, a matrix build on native
-macOS/Windows/Linux runners. Download the installer for your OS from the
-workflow run's **Artifacts**. Notes for those builds:
+Windows and Linux installers are not cross-built from macOS — all three are
+produced by the **`desktop-build` GitHub Actions workflow**, a matrix build on
+native macOS/Windows/Linux runners:
 
-- **Windows** (`.exe`): unsigned, so SmartScreen shows a warning — click
-  **"More info" → "Run anyway."**
+- A **manual run** ("Run workflow" in the Actions tab) uploads the three
+  installers as that run's **Artifacts**.
+- Pushing a **`v*` tag** builds them *and* publishes them to a draft GitHub
+  **Release** — see *Cutting a release* below.
+
+Notes for the per-OS installers (all unsigned):
+
+- **Windows** (`.exe`): SmartScreen shows a warning — click **"More info" →
+  "Run anyway."**
 - **Linux** (`.AppImage`): make it executable (`chmod +x Gen-Con-Planner-*.AppImage`)
   then run it directly.
+
+### Cutting a release
+
+1. Bump `version` in `package.json` (it must match the tag).
+2. Commit, then tag and push — e.g. `git tag v0.2.0 && git push origin v0.2.0`.
+3. The `desktop-build` workflow builds all three installers and attaches them
+   to a **draft** GitHub Release named for the tag.
+4. Open the draft under **Releases**, review it, and click **Publish release**
+   — that is when the download links become public.
 
 ## Event data
 

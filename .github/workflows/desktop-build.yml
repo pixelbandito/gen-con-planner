@@ -1,16 +1,21 @@
 name: Desktop Build
 
 # Builds unsigned desktop installers (.dmg / NSIS .exe / .AppImage) on native
-# runners. Cross-building Windows/Linux from macOS is unreliable, so each target
-# is built on its own OS via a matrix.
+# runners. Cross-building Windows/Linux from macOS is unreliable, so each
+# target is built on its own OS via a matrix.
+#
+# Triggers:
+#  - workflow_dispatch: a manual run that just produces installer artifacts.
+#  - a v* tag push: builds AND publishes the installers to a draft GitHub
+#    Release named for the tag. Review the draft, then publish it.
 on:
-  # Manual trigger from the Actions tab.
   workflow_dispatch:
-  # Also run on every push to the desktop-app branch. workflow_dispatch alone
-  # only shows up in the UI on the default branch, so the push trigger ensures
-  # this workflow actually runs while the feature lives on its own branch.
   push:
-    branches: [explore/desktop-app]
+    tags: ['v*']
+
+# Needed so a tagged build can create / update the GitHub Release.
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -22,20 +27,29 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           # Project pins Node >=22.12 (.nvmrc / engines / engine-strict).
           node-version: 22
 
       - run: npm ci
 
-      # No platform flag — electron-builder builds for the host OS:
+      # electron-builder builds for the host OS (no platform flag):
       # .dmg on macOS, NSIS .exe on Windows, .AppImage on Linux.
-      - run: npm run dist
+      - name: Build installers
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: npm run dist
 
-      - uses: actions/upload-artifact@v4
+      # On a v* tag, also publish the installers to a draft GitHub Release.
+      - name: Build installers and publish draft release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: npm run dist:release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-installer-${{ matrix.os }}
           path: |
