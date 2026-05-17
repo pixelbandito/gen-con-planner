@@ -41,11 +41,12 @@ Building installers requires **Node ≥ 22** (an `.nvmrc` pins this; run
 - `npm run dist:linux` — Linux `AppImage`
 - `npm run electron:dev` — run the app from a local build (development)
 
-The macOS build is **unsigned** (no Apple Developer certificate). On first
-launch macOS Gatekeeper blocks it. To open it once: try to open the app, then
-go to **System Settings → Privacy & Security**, scroll to the Security section
-where it names the blocked app, and click **"Open Anyway"** (re-confirm, and
-enter an admin password if asked). After that first time it opens normally.
+The installers are all **unsigned** — a paid Apple/Microsoft signing
+certificate isn't worth it for a hobby app — so each OS shows a one-time
+warning the first time the app is opened (on macOS it even says "damaged",
+which it is not). The per-OS steps to get past it are in
+**[INSTALL.md](INSTALL.md)**; link that file from your release notes so the
+people downloading the app actually find it.
 
 Windows and Linux installers are not cross-built from macOS — all three are
 produced by the **`desktop-build` GitHub Actions workflow**, a matrix build on
@@ -56,21 +57,16 @@ native macOS/Windows/Linux runners:
 - Pushing a **`v*` tag** builds them *and* publishes them to a draft GitHub
   **Release** — see *Cutting a release* below.
 
-Notes for the per-OS installers (all unsigned):
-
-- **Windows** (`.exe`): SmartScreen shows a warning — click **"More info" →
-  "Run anyway."**
-- **Linux** (`.AppImage`): make it executable (`chmod +x Gen-Con-Planner-*.AppImage`)
-  then run it directly.
-
 ### Cutting a release
 
 1. Bump `version` in `package.json` (it must match the tag).
 2. Commit, then tag and push — e.g. `git tag v0.2.0 && git push origin v0.2.0`.
 3. The `desktop-build` workflow builds all three installers and attaches them
    to a **draft** GitHub Release named for the tag.
-4. Open the draft under **Releases**, review it, and click **Publish release**
-   — that is when the download links become public.
+4. Open the draft under **Releases**, review it, and paste the first-run
+   instructions into the release notes — copy [INSTALL.md](INSTALL.md), or
+   link to it — so downloaders see how to get past the unsigned-app warning.
+5. Click **Publish release** — that is when the download links become public.
 
 ## Event data
 
