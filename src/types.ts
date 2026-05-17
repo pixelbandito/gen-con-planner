@@ -26,11 +26,25 @@ export interface GenConEvent {
   dupKey: string;
 }
 
-/** The bundled, read-only event dataset produced by the scraper. */
-export interface EventsDataset {
-  scrapedAt: string;
-  conventionId: number | null;
-  gameSystems: string[];
+/** One entry in a GenCon catalog (game systems or event categories). */
+export interface CatalogEntry {
+  name: string;
+  eventCount: number;
+}
+
+/** Which cacheable axis a collection belongs to. */
+export type CollectionKind = 'game' | 'category' | 'search';
+
+/**
+ * One cacheable fetch unit as served by the GenCon proxy: all events for a
+ * single game system (`kind:'game'`), event category (`kind:'category'`), or
+ * free-text query (`kind:'search'`, where `name` is the query string).
+ */
+export interface Collection {
+  kind: CollectionKind;
+  name: string;
+  fetchedAt: string;
+  stale: boolean;
   events: GenConEvent[];
 }
 
@@ -45,3 +59,14 @@ export interface Wishlist {
   version: number;
   entries: WishlistEntry[];
 }
+
+/** A pending slot-search request raised by clicking the agenda grid. */
+export type SlotSearch =
+  | { kind: 'overlap'; ts: number }
+  | { kind: 'contained'; start: number; end: number }
+  | null;
+
+/** Which slice of the wishlist the agenda renders. */
+export type PriorityFilter =
+  | { mode: 'layer'; layer: number }
+  | { mode: 'range'; a: number; b: number };

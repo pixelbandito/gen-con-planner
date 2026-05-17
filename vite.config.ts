@@ -1,9 +1,10 @@
-import { defineConfig } from 'vite';
+import { defineConfig, configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { genconProxy } from './server/gencon-proxy.mjs';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), genconProxy()],
   // Preferred port, clear of Vite's default 5173 cluster. strictPort is off,
   // so Vite falls back to the next free port if 5757/5758 is taken.
   server: {
@@ -11,5 +12,10 @@ export default defineConfig({
   },
   preview: {
     port: 5758,
+  },
+  test: {
+    // Don't scan into git worktrees under .worktrees/, or their copies of the
+    // test files double-count when a worktree exists.
+    exclude: [...configDefaults.exclude, '.worktrees/**'],
   },
 });

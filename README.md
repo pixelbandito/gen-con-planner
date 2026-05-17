@@ -16,17 +16,32 @@ Open the printed URL. The wishlist auto-saves to `localStorage`; use the
 Export/Import buttons in the Wishlist panel to back it up or move it between
 machines.
 
-## Refreshing event data
+## Running it
 
-Event data is scraped from Gen Con's public `event_search` API into
-`public/data/events.json`. Re-run it any time, with any game systems:
+**With the live proxy** — `npm run dev` (or `npm run preview` after a build).
+A Vite plugin runs the GenCon proxy, so you can search and cache events live.
 
-```bash
-npm run scrape "Magic: The Gathering" "Dungeons & Dragons"
-npm run scrape "Board Game"            # add more systems
-```
+**As a static, offline site** — `npm run build` produces a `dist/` you can
+serve from any static host (`npx serve dist`) or hand to a friend. It has no
+proxy, so it loads events from the bundled `public/data/events.json` instead:
+browsing, the wishlist, and the agenda all work offline; only *live* GenCon
+search and cache refresh need the proxy (`npm run dev`/`preview`).
 
-With no arguments it defaults to Magic + D&D.
+## Event data
+
+While the proxy is running, the app fetches game systems, event categories,
+and free-text searches live from Gen Con and caches them under `cache/`
+(gitignored). Two commands manage that data:
+
+- `npm run bundle` — snapshot everything currently in `cache/` into
+  `public/data/events.json`, the committed dataset the offline/static build
+  ships with. Run it after loading the events you want to share, then commit
+  the result.
+- `npm run scrape "Magic: The Gathering" "Board Game"` — a CLI that pre-warms
+  `cache/` for the named game systems without opening the app.
+
+`public/data/events.json` also seeds the proxy's cache on first run, so a
+fresh clone starts with data.
 
 ## How it works
 
@@ -45,8 +60,10 @@ the ranked wishlist.
 ## Project layout
 
 ```
-scripts/scrape.mjs        Reusable CLI scraper
-public/data/events.json   Scraped, read-only event dataset
+scripts/scrape.mjs        CLI cache pre-warmer
+scripts/bundle.mjs        Snapshots cache/ into public/data/events.json
+server/                   GenCon proxy Vite plugin + shared fetch logic
+public/data/events.json   Bundled dataset — offline data source + proxy seed
 src/types.ts              Event + Wishlist models
 src/lib/schedule.ts       Conflict / greedy-schedule / hedge logic
 src/lib/storage.ts        localStorage + JSON export/import
@@ -60,4 +77,6 @@ docs/plans/               Design document
 - `npm run build` — static production build into `dist/`
 - `npm run preview` — serve the production build
 - `npm run typecheck` — TypeScript check
-- `npm run scrape` — refresh event data
+- `npm run test` — run the test suite
+- `npm run scrape` — pre-warm the event cache from the CLI
+- `npm run bundle` — snapshot the cache into `public/data/events.json`

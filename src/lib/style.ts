@@ -1,5 +1,15 @@
 // Small presentation helpers shared across components.
 
+import type { ScheduleStatus } from './schedule';
+
+/** Human-readable label for each schedule status, shared across components. */
+export const STATUS_LABEL: Record<ScheduleStatus, string> = {
+  scheduled: 'Scheduled',
+  bumped: 'Bumped',
+  untimed: 'No time set',
+  missing: 'Not in dataset',
+};
+
 /** CSS class keyed to a game system, for consistent color-coding. */
 export function gameClass(gameSystem: string): string {
   const g = (gameSystem || '').toLowerCase();
