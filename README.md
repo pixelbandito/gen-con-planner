@@ -27,6 +27,36 @@ proxy, so it loads events from the bundled `public/data/events.json` instead:
 browsing, the wishlist, and the agenda all work offline; only *live* GenCon
 search and cache refresh need the proxy (`npm run dev`/`preview`).
 
+## Desktop app
+
+Gen Con Planner can also be packaged as a standalone desktop app (Electron)
+that runs live Gen Con search with no Node, npm, or terminal required — it
+bundles its own Node runtime and the GenCon proxy.
+
+Building installers requires **Node ≥ 22** (an `.nvmrc` pins this; run
+`nvm use`). They land in `release/`:
+
+- `npm run dist:mac` — macOS `.dmg`
+- `npm run dist:win` — Windows NSIS `.exe`
+- `npm run dist:linux` — Linux `AppImage`
+- `npm run electron:dev` — run the app from a local build (development)
+
+The macOS build is **unsigned** (no Apple Developer certificate). On first
+launch macOS Gatekeeper blocks it. To open it once: try to open the app, then
+go to **System Settings → Privacy & Security**, scroll to the Security section
+where it names the blocked app, and click **"Open Anyway"** (re-confirm, and
+enter an admin password if asked). After that first time it opens normally.
+
+Windows and Linux installers are not cross-built from macOS — they are produced
+by the **`desktop-build` GitHub Actions workflow**, a matrix build on native
+macOS/Windows/Linux runners. Download the installer for your OS from the
+workflow run's **Artifacts**. Notes for those builds:
+
+- **Windows** (`.exe`): unsigned, so SmartScreen shows a warning — click
+  **"More info" → "Run anyway."**
+- **Linux** (`.AppImage`): make it executable (`chmod +x Gen-Con-Planner-*.AppImage`)
+  then run it directly.
+
 ## Event data
 
 While the proxy is running, the app fetches game systems, event categories,

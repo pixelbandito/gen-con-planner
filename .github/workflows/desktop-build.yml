@@ -1,0 +1,46 @@
+name: Desktop Build
+
+# Builds unsigned desktop installers (.dmg / NSIS .exe / .AppImage) on native
+# runners. Cross-building Windows/Linux from macOS is unreliable, so each target
+# is built on its own OS via a matrix.
+on:
+  # Manual trigger from the Actions tab.
+  workflow_dispatch:
+  # Also run on every push to the desktop-app branch. workflow_dispatch alone
+  # only shows up in the UI on the default branch, so the push trigger ensures
+  # this workflow actually runs while the feature lives on its own branch.
+  push:
+    branches: [explore/desktop-app]
+
+jobs:
+  build:
+    strategy:
+      # Don't cancel the other OS builds if one fails — we want every
+      # installer that can be produced.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Project pins Node >=22.12 (.nvmrc / engines / engine-strict).
+          node-version: 22
+
+      - run: npm ci
+
+      # No platform flag — electron-builder builds for the host OS:
+      # .dmg on macOS, NSIS .exe on Windows, .AppImage on Linux.
+      - run: npm run dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-installer-${{ matrix.os }}
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.AppImage
+          if-no-files-found: warn
+          retention-days: 30

@@ -2,7 +2,13 @@
   "name": "gen-con-planner",
   "private": true,
   "version": "0.1.0",
+  "description": "Plan a Gen Con schedule: browse events, build a ranked wishlist, and visualize conflicts.",
+  "author": "pixelbandito",
   "type": "module",
+  "main": "electron/main.cjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,7 +17,46 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "scrape": "node scripts/scrape.mjs",
-    "bundle": "node scripts/bundle.mjs"
+    "bundle": "node scripts/bundle.mjs",
+    "build:desktop": "cross-env VITE_BASE=/ vite build",
+    "electron:dev": "npm run build:desktop && electron electron/main.cjs",
+    "dist": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
+    "dist:mac": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
+    "dist:win": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
+    "dist:linux": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --linux --publish never"
+  },
+  "build": {
+    "appId": "com.pixelbandito.gen-con-planner",
+    "productName": "Gen Con Planner",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**",
+      "server/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist",
+        "to": "dist"
+      },
+      {
+        "from": "public/data/events.json",
+        "to": "data/events.json"
+      }
+    ],
+    "mac": {
+      "target": "dmg",
+      "identity": null
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Game"
+    }
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -21,6 +66,9 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "cross-env": "^10.1.0",
+    "electron": "^42.1.0",
+    "electron-builder": "^26.8.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"
