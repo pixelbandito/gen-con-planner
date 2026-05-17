@@ -2,6 +2,8 @@
   "name": "gen-con-planner",
   "private": true,
   "version": "0.1.0",
+  "description": "Plan a Gen Con schedule: browse events, build a ranked wishlist, and visualize conflicts.",
+  "author": "pixelbandito",
   "type": "module",
   "main": "electron/main.cjs",
   "engines": {
@@ -18,10 +20,10 @@
     "bundle": "node scripts/bundle.mjs",
     "build:desktop": "cross-env VITE_BASE=/ vite build",
     "electron:dev": "npm run build:desktop && electron electron/main.cjs",
-    "dist": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
-    "dist:mac": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
-    "dist:win": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win",
-    "dist:linux": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --linux"
+    "dist": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
+    "dist:mac": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
+    "dist:win": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
+    "dist:linux": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --linux --publish never"
   },
   "build": {
     "appId": "com.pixelbandito.gen-con-planner",
