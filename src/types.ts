@@ -33,12 +33,13 @@ export interface CatalogEntry {
 }
 
 /** Which cacheable axis a collection belongs to. */
-export type CollectionKind = 'game' | 'category' | 'search';
+export type CollectionKind = 'game' | 'category' | 'host' | 'search';
 
 /**
  * One cacheable fetch unit as served by the GenCon proxy: all events for a
- * single game system (`kind:'game'`), event category (`kind:'category'`), or
- * free-text query (`kind:'search'`, where `name` is the query string).
+ * single game system (`kind:'game'`), event category (`kind:'category'`),
+ * host / group sponsor (`kind:'host'`), or free-text query (`kind:'search'`,
+ * where `name` is the query string).
  */
 export interface Collection {
   kind: CollectionKind;

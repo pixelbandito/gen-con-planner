@@ -16,6 +16,7 @@ import {
   fetchCategories,
   fetchCollection,
   fetchEventsByIds,
+  fetchHosts,
   fetchSystems,
 } from './lib/api';
 import {
@@ -47,6 +48,7 @@ export default function App() {
   // The GenCon catalogs, fetched separately and non-blocking.
   const [gameCatalog, setGameCatalog] = useState<CatalogEntry[]>([]);
   const [categoryCatalog, setCategoryCatalog] = useState<CatalogEntry[]>([]);
+  const [hostCatalog, setHostCatalog] = useState<CatalogEntry[]>([]);
   // Collections currently being fetched/refreshed live, keyed `kind::name`.
   const [loadingCollections, setLoadingCollections] = useState(
     () => new Set<string>(),
@@ -75,6 +77,7 @@ export default function App() {
     b: 300,
   });
   const [searchCollapsed, setSearchCollapsed] = useState(false);
+  const [agendaCollapsed, setAgendaCollapsed] = useState(false);
   const [wishlistCollapsed, setWishlistCollapsed] = useState(false);
 
   // Load every cached collection from the GenCon proxy on startup.
@@ -92,7 +95,7 @@ export default function App() {
       });
   }, []);
 
-  // Load both catalogs separately — they must not block the app.
+  // Load every catalog separately — they must not block the app.
   // On failure the pickers fall back to whatever collections are loaded.
   useEffect(() => {
     fetchSystems()
@@ -102,6 +105,11 @@ export default function App() {
       });
     fetchCategories()
       .then(({ categories }) => setCategoryCatalog(categories))
+      .catch(() => {
+        /* Catalog unavailable — picker falls back to loaded collections. */
+      });
+    fetchHosts()
+      .then(({ hosts }) => setHostCatalog(hosts))
       .catch(() => {
         /* Catalog unavailable — picker falls back to loaded collections. */
       });
@@ -148,15 +156,17 @@ export default function App() {
     return loadCollectionEvents(kind, name, true);
   }
 
-  // Refresh both catalogs together. Each catalog's result is applied
-  // independently (a catalog that loaded still updates even if the other
-  // failed), but `systemError` is only cleared when BOTH succeed — so one
-  // catalog's success can never mask the other's failure.
+  // Refresh all catalogs together. Each catalog's result is applied
+  // independently (a catalog that loaded still updates even if another
+  // failed), but `systemError` is only cleared when ALL succeed — so one
+  // catalog's success can never mask another's failure.
   async function refreshCatalogs() {
-    const [systemsResult, categoriesResult] = await Promise.allSettled([
-      fetchSystems(true),
-      fetchCategories(true),
-    ]);
+    const [systemsResult, categoriesResult, hostsResult] =
+      await Promise.allSettled([
+        fetchSystems(true),
+        fetchCategories(true),
+        fetchHosts(true),
+      ]);
 
     if (systemsResult.status === 'fulfilled') {
       setGameCatalog(systemsResult.value.systems);
@@ -164,19 +174,21 @@ export default function App() {
     if (categoriesResult.status === 'fulfilled') {
       setCategoryCatalog(categoriesResult.value.categories);
     }
+    if (hostsResult.status === 'fulfilled') {
+      setHostCatalog(hostsResult.value.hosts);
+    }
 
-    const systemsFailed = systemsResult.status === 'rejected';
-    const categoriesFailed = categoriesResult.status === 'rejected';
-    if (!systemsFailed && !categoriesFailed) {
+    const failed: string[] = [];
+    if (systemsResult.status === 'rejected') failed.push('game-system');
+    if (categoriesResult.status === 'rejected') failed.push('category');
+    if (hostsResult.status === 'rejected') failed.push('host');
+    if (failed.length === 0) {
       setSystemError(null);
-    } else if (systemsFailed && categoriesFailed) {
-      setSystemError(
-        'Could not refresh the game-system catalog or the category catalog',
-      );
-    } else if (systemsFailed) {
-      setSystemError('Could not refresh the game-system catalog');
     } else {
-      setSystemError('Could not refresh the category catalog');
+      setSystemError(
+        `Could not refresh the ${failed.join(', ')} catalog` +
+          (failed.length === 1 ? '' : 's'),
+      );
     }
   }
 
@@ -413,6 +425,15 @@ export default function App() {
     (e) => fullResult.get(e.eventId)?.status === 'bumped',
   ).length;
 
+  // Any pane can collapse to a rail, but at least one must stay expanded.
+  // A pane only gets a collapse control when it is not the last one open —
+  // so the final expanded pane simply has no way to be collapsed.
+  const expandedCount =
+    (searchCollapsed ? 0 : 1) +
+    (agendaCollapsed ? 0 : 1) +
+    (wishlistCollapsed ? 0 : 1);
+  const canCollapseMore = expandedCount > 1;
+
   return (
     <div className="app">
       <header className="topbar">
@@ -461,11 +482,15 @@ export default function App() {
             />
           ) : (
             <EventBrowser
+              onCollapse={
+                canCollapseMore ? () => setSearchCollapsed(true) : undefined
+              }
               events={events}
               rankById={rankById}
               wishlistIds={wishlistIds}
               gameCatalog={gameCatalog}
               categoryCatalog={categoryCatalog}
+              hostCatalog={hostCatalog}
               collections={collections}
               loadingCollections={loadingCollections}
               systemError={systemError}
@@ -475,28 +500,38 @@ export default function App() {
               onSelect={setSelectedId}
               onMatchIds={setActiveMatchIds}
               onClearSlotSearch={() => setSlotSearch(null)}
-              onCollapse={() => setSearchCollapsed(true)}
               onLoadCollection={loadCollection}
               onRefreshCollection={refreshCollection}
               onRefreshCatalogs={refreshCatalogs}
             />
           )}
-          <AgendaView
-            entries={wishlist.entries}
-            eventsById={eventsById}
-            layers={agendaLayers}
-            wishlistLength={wishlist.entries.length}
-            hiddenIds={hiddenIds}
-            rankById={rankById}
-            priorityFilter={priorityFilter}
-            slotSearch={slotSearch}
-            onPriorityFilter={setPriorityFilter}
-            onClearHidden={clearHidden}
-            onSelect={setSelectedId}
-            onSlotSearch={setSlotSearch}
-            onUncollapseSearch={() => setSearchCollapsed(false)}
-            onToggleHidden={toggleHidden}
-          />
+          {agendaCollapsed ? (
+            <CollapsedRail
+              label="Agenda"
+              side="center"
+              onExpand={() => setAgendaCollapsed(false)}
+            />
+          ) : (
+            <AgendaView
+              entries={wishlist.entries}
+              eventsById={eventsById}
+              layers={agendaLayers}
+              wishlistLength={wishlist.entries.length}
+              hiddenIds={hiddenIds}
+              rankById={rankById}
+              priorityFilter={priorityFilter}
+              slotSearch={slotSearch}
+              onPriorityFilter={setPriorityFilter}
+              onClearHidden={clearHidden}
+              onSelect={setSelectedId}
+              onSlotSearch={setSlotSearch}
+              onUncollapseSearch={() => setSearchCollapsed(false)}
+              onToggleHidden={toggleHidden}
+              onCollapse={
+                canCollapseMore ? () => setAgendaCollapsed(true) : undefined
+              }
+            />
+          )}
           {wishlistCollapsed ? (
             <CollapsedRail
               label="Wishlist"
@@ -505,6 +540,9 @@ export default function App() {
             />
           ) : (
             <WishlistPanel
+              onCollapse={
+                canCollapseMore ? () => setWishlistCollapsed(true) : undefined
+              }
               wishlist={wishlist}
               eventsById={eventsById}
               fullResult={fullResult}
@@ -519,7 +557,6 @@ export default function App() {
               onExport={() => exportWishlist(wishlist)}
               onImport={handleImport}
               onClear={clearWishlist}
-              onCollapse={() => setWishlistCollapsed(true)}
               missingCount={missingWishlistIds.size}
               recovering={recovering}
               onRecover={recoverMissingEvents}

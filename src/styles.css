@@ -72,17 +72,30 @@ code {
   display: flex;
   flex: 1;
   min-height: 0;
+  /* Clip anything an expanded pane fails to contain so a pane can never
+     bleed past the window edge. */
+  overflow: hidden;
 }
+/* Every expanded pane is an overflow-contained flex column. `overflow: hidden`
+   clips its own content; `min-width: 0` / `min-height: 0` let its flex
+   children actually shrink so their own scroll regions take over instead of
+   forcing the pane wider. */
 .pane {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: var(--panel);
   border-right: 1px solid var(--line);
 }
-.pane-browser { width: 360px; flex: none; }
-.pane-agenda { flex: 1; min-width: 0; }
-.pane-wishlist { width: 380px; flex: none; border-right: none; }
+/* Expanded panes share the row's width. Each has a comfortable preferred
+   width but may grow, so one expanded pane fills the window and two or three
+   divide it without dead space. The side panes flex less eagerly than the
+   agenda so the agenda still gets the lion's share when all three are open. */
+.pane-browser { flex: 2 1 320px; }
+.pane-agenda { flex: 5 1 420px; }
+.pane-wishlist { flex: 2 1 340px; border-right: none; }
 
 .pane-head {
   display: flex;
@@ -94,6 +107,29 @@ code {
 }
 .pane-head h2 { font-size: 14px; }
 .count { font-size: 12px; color: var(--ink-soft); }
+
+/* ---- search pane: slim sticky bar + single scroll region ---- */
+/* The bar stays pinned; the filters and "Manage cached events" sections
+   live inside .search-scroll so they scroll off as results are browsed. */
+.search-bar {
+  gap: 10px;
+  padding: 7px 14px;
+}
+.search-bar .count { margin-right: auto; }
+.filters-toggle {
+  flex: none;
+  font-weight: 600;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.filters-toggle:hover { background: color-mix(in srgb, var(--accent) 10%, #fff); }
+.search-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
 
 /* collapse button in a side pane's header */
 .pane-collapse {
@@ -116,6 +152,9 @@ code {
   border-right: 1px solid var(--line);
 }
 .pane-rail-right { border-right: none; border-left: 1px solid var(--line); }
+/* A collapsed center pane sits between its neighbors; keep its own right
+   border as the divider toward whatever is on its right. */
+.pane-rail-center { border-right: 1px solid var(--line); }
 .rail-expand {
   flex: none;
   line-height: 1;
@@ -139,6 +178,9 @@ code {
   border-bottom: 1px solid var(--line);
   flex: none;
 }
+/* Filters live inside the scroll region, so the SearchableSelect dropdown
+   must overlay the results below it rather than be clipped. */
+.search-scroll .filters { position: relative; z-index: 2; }
 .filters input[type="search"],
 .filters input[type="number"],
 .filters select {
@@ -254,6 +296,9 @@ code {
 }
 
 /* ---- manage-data section ---- */
+/* A quiet, collapsible appendix to the filter panel — not a results header.
+   It shares the filter panel's bottom border and stays visually subordinate
+   to the filter controls above it. */
 .manage-data {
   border-bottom: 1px solid var(--line);
   flex: none;
@@ -261,25 +306,25 @@ code {
 .manage-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   width: 100%;
-  padding: 8px 14px;
+  padding: 5px 14px;
   font: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--ink-soft);
-  background: #f7f8fa;
+  background: none;
   border: none;
   cursor: pointer;
   text-align: left;
 }
-.manage-toggle:hover { background: #eef0f4; }
-.manage-caret { font-size: 10px; }
+.manage-toggle:hover { color: var(--ink); }
+.manage-caret { font-size: 9px; }
 .manage-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 4px 14px 10px;
 }
 /* ---- loaded-data cache list ---- */
 .cache-list {
@@ -324,6 +369,11 @@ code {
 .cache-kind-search {
   background: #d8efe1;
   color: #1f7d47;
+}
+/* host collections get a distinct tag color */
+.cache-kind-host {
+  background: #f6e4cf;
+  color: #95591b;
 }
 .cache-time { color: var(--ink-soft); flex: none; }
 
@@ -383,7 +433,9 @@ code {
 }
 
 /* ---- event list ---- */
-.event-list { overflow-y: auto; flex: 1; }
+/* Scrolling is owned by the parent .search-scroll; this block just grows to
+   fill leftover space so a short result set still pushes the pane bottom. */
+.event-list { flex: 1; }
 .event-row {
   display: flex;
   align-items: stretch;
@@ -647,7 +699,16 @@ code {
   flex: none;
 }
 
-.cal-scroll { overflow: auto; flex: 1; }
+/* The agenda's only scroll region. `min-width: 0` / `min-height: 0` stop the
+   wide `min-content` board and the tall hour grid from forcing the pane to
+   grow — the board scrolls inside this box instead of spilling into the
+   neighboring pane. */
+.cal-scroll {
+  overflow: auto;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
 .cal-board { display: flex; min-width: min-content; }
 .cal-col {
   border-right: 1px solid var(--line);

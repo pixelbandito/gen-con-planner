@@ -25,6 +25,7 @@ interface Props {
   wishlistIds: Set<number>;
   gameCatalog: CatalogEntry[];
   categoryCatalog: CatalogEntry[];
+  hostCatalog: CatalogEntry[];
   collections: Map<string, Collection>;
   loadingCollections: Set<string>;
   systemError: string | null;
@@ -34,7 +35,11 @@ interface Props {
   onSelect: (id: number) => void;
   onMatchIds: (ids: Set<number>) => void;
   onClearSlotSearch: () => void;
-  onCollapse: () => void;
+  /**
+   * Collapse the search pane to a rail. Omitted when search is the only
+   * expanded pane, which hides the collapse control so one pane stays open.
+   */
+  onCollapse?: () => void;
   onLoadCollection: (kind: CollectionKind, name: string) => void;
   onRefreshCollection: (kind: CollectionKind, name: string) => void;
   onRefreshCatalogs: () => void;
@@ -84,6 +89,7 @@ export function EventBrowser({
   wishlistIds,
   gameCatalog,
   categoryCatalog,
+  hostCatalog,
   collections,
   loadingCollections,
   systemError,
@@ -101,6 +107,7 @@ export function EventBrowser({
   const [text, setText] = useState('');
   const [gameSystem, setGameSystem] = useState('');
   const [eventType, setEventType] = useState('');
+  const [host, setHost] = useState('');
   const [day, setDay] = useState('');
   const [maxCost, setMaxCost] = useState('');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
@@ -116,26 +123,41 @@ export function EventBrowser({
     () => catalogOptions('category', categoryCatalog, collections),
     [categoryCatalog, collections],
   );
+  const hostOptions = useMemo(
+    () => catalogOptions('host', hostCatalog, collections),
+    [hostCatalog, collections],
+  );
 
-  // Options for the searchable game-system picker. Preserves the loaded-✓
-  // marker and event count in the label so they stay visible and searchable.
+  // Options for the searchable game-system picker. The label is just the
+  // system name plus its event count; what's cached is shown in the
+  // "Manage cached events" section instead.
   const systemSelectOptions = useMemo<SearchableSelectOption[]>(() => {
     const opts: SearchableSelectOption[] = [
       { value: '', label: 'All game systems' },
     ];
     for (const s of systemOptions) {
-      const loaded = collections.has(collectionKey('game', s.name));
       const count = s.eventCount > 0 ? ` (${s.eventCount})` : '';
       opts.push({
         value: s.name,
-        label: `${loaded ? '✓ ' : ''}${s.name}${count}`,
+        label: `${s.name}${count}`,
       });
     }
     return opts;
-  }, [systemOptions, collections]);
+  }, [systemOptions]);
 
-  // Loaded collections (game, category, and search kinds), sorted, for the
-  // cache-management section.
+  // Options for the searchable host picker. The host catalog is large
+  // (~772 entries), so it uses the same combobox as the game-system picker.
+  const hostSelectOptions = useMemo<SearchableSelectOption[]>(() => {
+    const opts: SearchableSelectOption[] = [{ value: '', label: 'All hosts' }];
+    for (const h of hostOptions) {
+      const count = h.eventCount > 0 ? ` (${h.eventCount})` : '';
+      opts.push({ value: h.name, label: `${h.name}${count}` });
+    }
+    return opts;
+  }, [hostOptions]);
+
+  // Loaded collections (game, category, host, and search kinds), sorted, for
+  // the cache-management section.
   const loadedCollections = useMemo(
     () =>
       [...collections.values()].sort(
@@ -174,6 +196,7 @@ export function EventBrowser({
     const rows = events.filter((e) => {
       if (gameSystem && e.gameSystem !== gameSystem) return false;
       if (eventType && e.eventType !== eventType) return false;
+      if (host && e.groupSponsor !== host) return false;
       if (day) {
         const w = parseWall(e.start);
         if (!w || w.dayKey !== day) return false;
@@ -216,7 +239,7 @@ export function EventBrowser({
     });
     return rows;
   }, [
-    events, text, gameSystem, eventType, day, maxCost,
+    events, text, gameSystem, eventType, host, day, maxCost,
     onlyAvailable, hideWishlisted, wishlistIds, slotSearch,
   ]);
 
@@ -225,6 +248,7 @@ export function EventBrowser({
     text.trim() !== '' ||
     gameSystem !== '' ||
     eventType !== '' ||
+    host !== '' ||
     day !== '' ||
     maxCost.trim() !== '' ||
     onlyAvailable ||
@@ -263,12 +287,21 @@ export function EventBrowser({
     }
   }
 
+  function handleHostChange(name: string) {
+    setHost(name);
+    if (name && !collections.has(collectionKey('host', name))) {
+      onLoadCollection('host', name);
+    }
+  }
+
   const systemLoading =
     gameSystem !== '' &&
     loadingCollections.has(collectionKey('game', gameSystem));
   const categoryLoading =
     eventType !== '' &&
     loadingCollections.has(collectionKey('category', eventType));
+  const hostLoading =
+    host !== '' && loadingCollections.has(collectionKey('host', host));
 
   // Run a free-text GenCon search: fetch a `search` collection through the
   // proxy and merge it into the event pool. The local substring filter is
@@ -281,23 +314,41 @@ export function EventBrowser({
     if (searchQuery !== '') onLoadCollection('search', searchQuery);
   }
 
+  // The filters + "Manage cached events" sections live inside the scroll
+  // region so they scroll off as the user browses results. The "Filters"
+  // button in the sticky bar scrolls the region back to the top to bring
+  // them into view again.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  function showFilters() {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   return (
     <section className="pane pane-browser">
-      <div className="pane-head">
-        <h2>Browse events</h2>
+      <div className="pane-head search-bar">
+        <button
+          className="btn btn-mini filters-toggle"
+          onClick={showFilters}
+          title="Scroll back to the filter controls"
+        >
+          Filters
+        </button>
         <span className="count">
           {filtered.length} match{filtered.length === 1 ? '' : 'es'}
         </span>
-        <button
-          className="btn btn-mini pane-collapse"
-          onClick={onCollapse}
-          title="Collapse search pane"
-          aria-label="Collapse search pane"
-        >
-          «
-        </button>
+        {onCollapse && (
+          <button
+            className="btn btn-mini pane-collapse"
+            onClick={onCollapse}
+            title="Collapse search pane"
+            aria-label="Collapse search pane"
+          >
+            «
+          </button>
+        )}
       </div>
 
+      <div className="search-scroll" ref={scrollRef}>
       <div className="filters">
         <div className="text-search">
           <input
@@ -338,17 +389,26 @@ export function EventBrowser({
         >
           <option value="">All event types</option>
           {categoryOptions.map((t) => {
-            const loaded = collections.has(collectionKey('category', t.name));
             const count = t.eventCount > 0 ? ` (${t.eventCount})` : '';
             return (
               <option key={t.name} value={t.name}>
-                {loaded ? '✓ ' : ''}{t.name}{count}
+                {t.name}{count}
               </option>
             );
           })}
         </select>
         {categoryLoading && (
           <div className="system-loading">Loading {eventType}…</div>
+        )}
+        <SearchableSelect
+          value={host}
+          options={hostSelectOptions}
+          onChange={handleHostChange}
+          placeholder="Search hosts…"
+          ariaLabel="Filter by host"
+        />
+        {hostLoading && (
+          <div className="system-loading">Loading {host}…</div>
         )}
         <select value={day} onChange={(e) => setDay(e.target.value)}>
           <option value="">All days</option>
@@ -389,7 +449,7 @@ export function EventBrowser({
           aria-expanded={manageOpen}
         >
           <span className="manage-caret">{manageOpen ? '▾' : '▸'}</span>
-          Loaded data ({loadedCollections.length})
+          Manage cached events ({loadedCollections.length})
         </button>
         {manageOpen && (
           <div className="manage-body">
@@ -409,9 +469,11 @@ export function EventBrowser({
                         <span className={`cache-kind cache-kind-${c.kind}`}>
                           {c.kind === 'category'
                             ? 'type'
-                            : c.kind === 'search'
-                              ? 'search'
-                              : 'game'}
+                            : c.kind === 'host'
+                              ? 'host'
+                              : c.kind === 'search'
+                                ? 'search'
+                                : 'game'}
                         </span>
                         <span className="cache-name">{c.name}</span>
                         {c.stale && (
@@ -497,6 +559,7 @@ export function EventBrowser({
         {filtered.length === 0 && (
           <div className="list-note">No events match these filters.</div>
         )}
+      </div>
       </div>
     </section>
   );

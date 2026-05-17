@@ -95,6 +95,26 @@ describe('parseBuckets', () => {
     ]);
   });
 
+  it('parses host buckets: drops empties, dedupes, sorts', () => {
+    const metaJson = {
+      filtered: {
+        printable_group_sponsor: {
+          buckets: [
+            { key: '', doc_count: 7 },
+            { key: '   ', doc_count: 4 },
+            { key: ' Baldman Games', doc_count: 6 },
+            { key: 'Baldman Games', doc_count: 318 },
+            { key: 'Catalyst Game Labs', doc_count: 91 },
+          ],
+        },
+      },
+    };
+    expect(parseBuckets(metaJson, 'printable_group_sponsor')).toEqual([
+      { name: 'Baldman Games', eventCount: 318 },
+      { name: 'Catalyst Game Labs', eventCount: 91 },
+    ]);
+  });
+
   it('returns [] when the aggregation is absent', () => {
     expect(parseBuckets({ filtered: {} }, 'event_type')).toEqual([]);
   });

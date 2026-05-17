@@ -3,8 +3,10 @@
 // Routes:
 //   GET /api/gencon/systems              - game-system catalog
 //   GET /api/gencon/categories           - event-category catalog
+//   GET /api/gencon/hosts                - host (group-sponsor) catalog
 //   GET /api/gencon/events?game=NAME     - events for one game system
 //   GET /api/gencon/events?category=NAME - events for one event category
+//   GET /api/gencon/events?host=NAME     - events for one host
 //   GET /api/gencon/events?search=TEXT   - events for a free-text query
 //   GET /api/gencon/events               - all cached collections (seeds from
 //                                          the bundle file if empty)
@@ -12,7 +14,7 @@
 // `?refresh=1` forces a live re-fetch.
 //
 // A "collection" is one cacheable fetch unit: { kind, name, fetchedAt, events }
-// where kind is 'game', 'category', or 'search'. Cache files are
+// where kind is 'game', 'category', 'host', or 'search'. Cache files are
 // <cacheDir>/events/<kind>-<slug>.json.
 //
 // `createGenconHandler({ cacheDir, bundlePath })` returns the request handler:
@@ -29,6 +31,8 @@ import {
   fetchEventById,
   fetchEvents,
   fetchGameSystems,
+  fetchHostEvents,
+  fetchHosts,
   fetchSearchEvents,
   isStale,
 } from './gencon.mjs';
@@ -46,6 +50,7 @@ export function createGenconHandler({ cacheDir, bundlePath }) {
   const EVENTS_CACHE_DIR = join(CACHE_DIR, 'events');
   const SYSTEMS_CACHE = join(CACHE_DIR, 'systems.json');
   const CATEGORIES_CACHE = join(CACHE_DIR, 'categories.json');
+  const HOSTS_CACHE = join(CACHE_DIR, 'hosts.json');
   const BUNDLE_PATH = bundlePath;
 
   // In-flight collection fetches, keyed by `${kind}-${slug}` — collapses
@@ -138,9 +143,25 @@ export function createGenconHandler({ cacheDir, bundlePath }) {
     });
   }
 
+  /** GET /api/gencon/hosts */
+  async function handleHosts(res, refresh) {
+    let cached = refresh ? null : await readJson(HOSTS_CACHE);
+    if (!cached) {
+      const hosts = await fetchHosts();
+      cached = { fetchedAt: new Date().toISOString(), hosts };
+      await writeJson(HOSTS_CACHE, cached);
+    }
+    sendJson(res, 200, {
+      fetchedAt: cached.fetchedAt,
+      stale: isStale(cached.fetchedAt),
+      hosts: cached.hosts,
+    });
+  }
+
   /** Fetch events for one collection by kind. */
   function fetchByKind(kind, name) {
     if (kind === 'category') return fetchCategoryEvents(name);
+    if (kind === 'host') return fetchHostEvents(name);
     if (kind === 'search') return fetchSearchEvents(name);
     return fetchEvents(name);
   }
@@ -302,6 +323,10 @@ export function createGenconHandler({ cacheDir, bundlePath }) {
         await handleCategories(res, refresh);
         return;
       }
+      if (url.pathname === '/api/gencon/hosts') {
+        await handleHosts(res, refresh);
+        return;
+      }
       if (url.pathname === '/api/gencon/events-by-id') {
         await handleEventsById(res, url.searchParams.get('ids'));
         return;
@@ -309,11 +334,14 @@ export function createGenconHandler({ cacheDir, bundlePath }) {
       if (url.pathname === '/api/gencon/events') {
         const game = url.searchParams.get('game');
         const category = url.searchParams.get('category');
+        const host = url.searchParams.get('host');
         const search = url.searchParams.get('search');
         if (game) {
           await handleCollection(res, 'game', game, refresh);
         } else if (category) {
           await handleCollection(res, 'category', category, refresh);
+        } else if (host) {
+          await handleCollection(res, 'host', host, refresh);
         } else if (search !== null) {
           if (search.trim() === '') {
             sendJson(res, 400, { error: 'search query must not be empty' });
