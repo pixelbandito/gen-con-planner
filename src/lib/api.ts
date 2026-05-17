@@ -64,9 +64,9 @@ export async function fetchCachedEvents(): Promise<{
 }
 
 /**
- * GET /api/gencon/events?game=NAME, ?category=NAME, or ?search=TEXT — one
- * collection. The query param name is the collection kind, so adding a kind
- * needs no change here.
+ * GET /api/gencon/events?game=NAME, ?category=NAME, ?host=NAME, or
+ * ?search=TEXT — one collection. The query param name is the collection kind,
+ * so adding a kind needs no change here.
  */
 export function fetchCollection(
   kind: CollectionKind,
@@ -110,5 +110,15 @@ export function fetchCategories(refresh = false): Promise<{
   const path = refresh
     ? '/api/gencon/categories?refresh=1'
     : '/api/gencon/categories';
+  return getJson(path);
+}
+
+/** GET /api/gencon/hosts — the host (group-sponsor) catalog. */
+export function fetchHosts(refresh = false): Promise<{
+  fetchedAt: string;
+  stale: boolean;
+  hosts: CatalogEntry[];
+}> {
+  const path = refresh ? '/api/gencon/hosts?refresh=1' : '/api/gencon/hosts';
   return getJson(path);
 }

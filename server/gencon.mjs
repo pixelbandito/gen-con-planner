@@ -9,6 +9,7 @@ const META_BASE =
   'https://www.gencon.com/api/event_search/meta_data?ag[]=eo&ag[]=tn';
 const SYSTEMS_META = `${META_BASE}&filter=game`;
 const CATEGORIES_META = `${META_BASE}&filter=category`;
+const HOSTS_META = `${META_BASE}&filter=host`;
 
 const STALE_MS = 7 * 24 * 3600 * 1000;
 
@@ -132,6 +133,11 @@ export function fetchCategories() {
   return fetchCatalog(CATEGORIES_META, 'event_type');
 }
 
+/** Fetch the GenCon host (group-sponsor) catalog. */
+export function fetchHosts() {
+  return fetchCatalog(HOSTS_META, 'printable_group_sponsor');
+}
+
 /** Build one event_search page URL for a given filter param. */
 function pageUrl(paramKey, value, page) {
   const params =
@@ -194,6 +200,11 @@ export function fetchCategoryEvents(category) {
 /** Page through event_search for one free-text query. */
 export function fetchSearchEvents(query) {
   return fetchAllEvents('search', query);
+}
+
+/** Page through event_search for one host (group sponsor). */
+export function fetchHostEvents(host) {
+  return fetchAllEvents('host[]', host);
 }
 
 /**

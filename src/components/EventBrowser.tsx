@@ -25,6 +25,7 @@ interface Props {
   wishlistIds: Set<number>;
   gameCatalog: CatalogEntry[];
   categoryCatalog: CatalogEntry[];
+  hostCatalog: CatalogEntry[];
   collections: Map<string, Collection>;
   loadingCollections: Set<string>;
   systemError: string | null;
@@ -84,6 +85,7 @@ export function EventBrowser({
   wishlistIds,
   gameCatalog,
   categoryCatalog,
+  hostCatalog,
   collections,
   loadingCollections,
   systemError,
@@ -101,6 +103,7 @@ export function EventBrowser({
   const [text, setText] = useState('');
   const [gameSystem, setGameSystem] = useState('');
   const [eventType, setEventType] = useState('');
+  const [host, setHost] = useState('');
   const [day, setDay] = useState('');
   const [maxCost, setMaxCost] = useState('');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
@@ -115,6 +118,10 @@ export function EventBrowser({
   const categoryOptions = useMemo(
     () => catalogOptions('category', categoryCatalog, collections),
     [categoryCatalog, collections],
+  );
+  const hostOptions = useMemo(
+    () => catalogOptions('host', hostCatalog, collections),
+    [hostCatalog, collections],
   );
 
   // Options for the searchable game-system picker. The label is just the
@@ -134,8 +141,19 @@ export function EventBrowser({
     return opts;
   }, [systemOptions]);
 
-  // Loaded collections (game, category, and search kinds), sorted, for the
-  // cache-management section.
+  // Options for the searchable host picker. The host catalog is large
+  // (~772 entries), so it uses the same combobox as the game-system picker.
+  const hostSelectOptions = useMemo<SearchableSelectOption[]>(() => {
+    const opts: SearchableSelectOption[] = [{ value: '', label: 'All hosts' }];
+    for (const h of hostOptions) {
+      const count = h.eventCount > 0 ? ` (${h.eventCount})` : '';
+      opts.push({ value: h.name, label: `${h.name}${count}` });
+    }
+    return opts;
+  }, [hostOptions]);
+
+  // Loaded collections (game, category, host, and search kinds), sorted, for
+  // the cache-management section.
   const loadedCollections = useMemo(
     () =>
       [...collections.values()].sort(
@@ -174,6 +192,7 @@ export function EventBrowser({
     const rows = events.filter((e) => {
       if (gameSystem && e.gameSystem !== gameSystem) return false;
       if (eventType && e.eventType !== eventType) return false;
+      if (host && e.groupSponsor !== host) return false;
       if (day) {
         const w = parseWall(e.start);
         if (!w || w.dayKey !== day) return false;
@@ -216,7 +235,7 @@ export function EventBrowser({
     });
     return rows;
   }, [
-    events, text, gameSystem, eventType, day, maxCost,
+    events, text, gameSystem, eventType, host, day, maxCost,
     onlyAvailable, hideWishlisted, wishlistIds, slotSearch,
   ]);
 
@@ -225,6 +244,7 @@ export function EventBrowser({
     text.trim() !== '' ||
     gameSystem !== '' ||
     eventType !== '' ||
+    host !== '' ||
     day !== '' ||
     maxCost.trim() !== '' ||
     onlyAvailable ||
@@ -263,12 +283,21 @@ export function EventBrowser({
     }
   }
 
+  function handleHostChange(name: string) {
+    setHost(name);
+    if (name && !collections.has(collectionKey('host', name))) {
+      onLoadCollection('host', name);
+    }
+  }
+
   const systemLoading =
     gameSystem !== '' &&
     loadingCollections.has(collectionKey('game', gameSystem));
   const categoryLoading =
     eventType !== '' &&
     loadingCollections.has(collectionKey('category', eventType));
+  const hostLoading =
+    host !== '' && loadingCollections.has(collectionKey('host', host));
 
   // Run a free-text GenCon search: fetch a `search` collection through the
   // proxy and merge it into the event pool. The local substring filter is
@@ -365,6 +394,16 @@ export function EventBrowser({
         {categoryLoading && (
           <div className="system-loading">Loading {eventType}…</div>
         )}
+        <SearchableSelect
+          value={host}
+          options={hostSelectOptions}
+          onChange={handleHostChange}
+          placeholder="Search hosts…"
+          ariaLabel="Filter by host"
+        />
+        {hostLoading && (
+          <div className="system-loading">Loading {host}…</div>
+        )}
         <select value={day} onChange={(e) => setDay(e.target.value)}>
           <option value="">All days</option>
           {days.map((d) => (
@@ -424,9 +463,11 @@ export function EventBrowser({
                         <span className={`cache-kind cache-kind-${c.kind}`}>
                           {c.kind === 'category'
                             ? 'type'
-                            : c.kind === 'search'
-                              ? 'search'
-                              : 'game'}
+                            : c.kind === 'host'
+                              ? 'host'
+                              : c.kind === 'search'
+                                ? 'search'
+                                : 'game'}
                         </span>
                         <span className="cache-name">{c.name}</span>
                         {c.stale && (

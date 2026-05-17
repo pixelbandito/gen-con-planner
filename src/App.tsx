@@ -16,6 +16,7 @@ import {
   fetchCategories,
   fetchCollection,
   fetchEventsByIds,
+  fetchHosts,
   fetchSystems,
 } from './lib/api';
 import {
@@ -47,6 +48,7 @@ export default function App() {
   // The GenCon catalogs, fetched separately and non-blocking.
   const [gameCatalog, setGameCatalog] = useState<CatalogEntry[]>([]);
   const [categoryCatalog, setCategoryCatalog] = useState<CatalogEntry[]>([]);
+  const [hostCatalog, setHostCatalog] = useState<CatalogEntry[]>([]);
   // Collections currently being fetched/refreshed live, keyed `kind::name`.
   const [loadingCollections, setLoadingCollections] = useState(
     () => new Set<string>(),
@@ -92,7 +94,7 @@ export default function App() {
       });
   }, []);
 
-  // Load both catalogs separately — they must not block the app.
+  // Load every catalog separately — they must not block the app.
   // On failure the pickers fall back to whatever collections are loaded.
   useEffect(() => {
     fetchSystems()
@@ -102,6 +104,11 @@ export default function App() {
       });
     fetchCategories()
       .then(({ categories }) => setCategoryCatalog(categories))
+      .catch(() => {
+        /* Catalog unavailable — picker falls back to loaded collections. */
+      });
+    fetchHosts()
+      .then(({ hosts }) => setHostCatalog(hosts))
       .catch(() => {
         /* Catalog unavailable — picker falls back to loaded collections. */
       });
@@ -148,15 +155,17 @@ export default function App() {
     return loadCollectionEvents(kind, name, true);
   }
 
-  // Refresh both catalogs together. Each catalog's result is applied
-  // independently (a catalog that loaded still updates even if the other
-  // failed), but `systemError` is only cleared when BOTH succeed — so one
-  // catalog's success can never mask the other's failure.
+  // Refresh all catalogs together. Each catalog's result is applied
+  // independently (a catalog that loaded still updates even if another
+  // failed), but `systemError` is only cleared when ALL succeed — so one
+  // catalog's success can never mask another's failure.
   async function refreshCatalogs() {
-    const [systemsResult, categoriesResult] = await Promise.allSettled([
-      fetchSystems(true),
-      fetchCategories(true),
-    ]);
+    const [systemsResult, categoriesResult, hostsResult] =
+      await Promise.allSettled([
+        fetchSystems(true),
+        fetchCategories(true),
+        fetchHosts(true),
+      ]);
 
     if (systemsResult.status === 'fulfilled') {
       setGameCatalog(systemsResult.value.systems);
@@ -164,19 +173,21 @@ export default function App() {
     if (categoriesResult.status === 'fulfilled') {
       setCategoryCatalog(categoriesResult.value.categories);
     }
+    if (hostsResult.status === 'fulfilled') {
+      setHostCatalog(hostsResult.value.hosts);
+    }
 
-    const systemsFailed = systemsResult.status === 'rejected';
-    const categoriesFailed = categoriesResult.status === 'rejected';
-    if (!systemsFailed && !categoriesFailed) {
+    const failed: string[] = [];
+    if (systemsResult.status === 'rejected') failed.push('game-system');
+    if (categoriesResult.status === 'rejected') failed.push('category');
+    if (hostsResult.status === 'rejected') failed.push('host');
+    if (failed.length === 0) {
       setSystemError(null);
-    } else if (systemsFailed && categoriesFailed) {
-      setSystemError(
-        'Could not refresh the game-system catalog or the category catalog',
-      );
-    } else if (systemsFailed) {
-      setSystemError('Could not refresh the game-system catalog');
     } else {
-      setSystemError('Could not refresh the category catalog');
+      setSystemError(
+        `Could not refresh the ${failed.join(', ')} catalog` +
+          (failed.length === 1 ? '' : 's'),
+      );
     }
   }
 
@@ -466,6 +477,7 @@ export default function App() {
               wishlistIds={wishlistIds}
               gameCatalog={gameCatalog}
               categoryCatalog={categoryCatalog}
+              hostCatalog={hostCatalog}
               collections={collections}
               loadingCollections={loadingCollections}
               systemError={systemError}

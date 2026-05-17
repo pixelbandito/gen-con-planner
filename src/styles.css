@@ -354,6 +354,11 @@ code {
   background: #d8efe1;
   color: #1f7d47;
 }
+/* host collections get a distinct tag color */
+.cache-kind-host {
+  background: #f6e4cf;
+  color: #95591b;
+}
 .cache-time { color: var(--ink-soft); flex: none; }
 
 /* ---- stale markers ---- */
