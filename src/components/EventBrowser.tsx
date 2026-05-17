@@ -35,7 +35,11 @@ interface Props {
   onSelect: (id: number) => void;
   onMatchIds: (ids: Set<number>) => void;
   onClearSlotSearch: () => void;
-  onCollapse: () => void;
+  /**
+   * Collapse the search pane to a rail. Omitted when search is the only
+   * expanded pane, which hides the collapse control so one pane stays open.
+   */
+  onCollapse?: () => void;
   onLoadCollection: (kind: CollectionKind, name: string) => void;
   onRefreshCollection: (kind: CollectionKind, name: string) => void;
   onRefreshCatalogs: () => void;
@@ -332,14 +336,16 @@ export function EventBrowser({
         <span className="count">
           {filtered.length} match{filtered.length === 1 ? '' : 'es'}
         </span>
-        <button
-          className="btn btn-mini pane-collapse"
-          onClick={onCollapse}
-          title="Collapse search pane"
-          aria-label="Collapse search pane"
-        >
-          «
-        </button>
+        {onCollapse && (
+          <button
+            className="btn btn-mini pane-collapse"
+            onClick={onCollapse}
+            title="Collapse search pane"
+            aria-label="Collapse search pane"
+          >
+            «
+          </button>
+        )}
       </div>
 
       <div className="search-scroll" ref={scrollRef}>

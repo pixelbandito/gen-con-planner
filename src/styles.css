@@ -72,17 +72,30 @@ code {
   display: flex;
   flex: 1;
   min-height: 0;
+  /* Clip anything an expanded pane fails to contain so a pane can never
+     bleed past the window edge. */
+  overflow: hidden;
 }
+/* Every expanded pane is an overflow-contained flex column. `overflow: hidden`
+   clips its own content; `min-width: 0` / `min-height: 0` let its flex
+   children actually shrink so their own scroll regions take over instead of
+   forcing the pane wider. */
 .pane {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: var(--panel);
   border-right: 1px solid var(--line);
 }
-.pane-browser { width: 360px; flex: none; }
-.pane-agenda { flex: 1; min-width: 0; }
-.pane-wishlist { width: 380px; flex: none; border-right: none; }
+/* Expanded panes share the row's width. Each has a comfortable preferred
+   width but may grow, so one expanded pane fills the window and two or three
+   divide it without dead space. The side panes flex less eagerly than the
+   agenda so the agenda still gets the lion's share when all three are open. */
+.pane-browser { flex: 2 1 320px; }
+.pane-agenda { flex: 5 1 420px; }
+.pane-wishlist { flex: 2 1 340px; border-right: none; }
 
 .pane-head {
   display: flex;
@@ -139,6 +152,9 @@ code {
   border-right: 1px solid var(--line);
 }
 .pane-rail-right { border-right: none; border-left: 1px solid var(--line); }
+/* A collapsed center pane sits between its neighbors; keep its own right
+   border as the divider toward whatever is on its right. */
+.pane-rail-center { border-right: 1px solid var(--line); }
 .rail-expand {
   flex: none;
   line-height: 1;
@@ -683,7 +699,16 @@ code {
   flex: none;
 }
 
-.cal-scroll { overflow: auto; flex: 1; }
+/* The agenda's only scroll region. `min-width: 0` / `min-height: 0` stop the
+   wide `min-content` board and the tall hour grid from forcing the pane to
+   grow — the board scrolls inside this box instead of spilling into the
+   neighboring pane. */
+.cal-scroll {
+  overflow: auto;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
 .cal-board { display: flex; min-width: min-content; }
 .cal-col {
   border-right: 1px solid var(--line);

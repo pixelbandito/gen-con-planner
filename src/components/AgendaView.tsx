@@ -27,6 +27,12 @@ interface Props {
   onSlotSearch: (s: SlotSearch) => void;
   onUncollapseSearch: () => void;
   onToggleHidden: (id: number) => void;
+  /**
+   * Collapse the agenda pane to a rail. Omitted when the agenda is the only
+   * expanded pane, which hides the collapse control so at least one pane
+   * always stays open.
+   */
+  onCollapse?: () => void;
 }
 
 const MIN_BLOCK_PX = 26;
@@ -134,6 +140,7 @@ export function AgendaView({
   onSlotSearch,
   onUncollapseSearch,
   onToggleHidden,
+  onCollapse,
 }: Props) {
   // ---- zoom state (Task 5) ----
   const [daysShown, setDaysShown] = useState<DaysShown>(4);
@@ -415,6 +422,16 @@ export function AgendaView({
             </button>
           </div>
         </div>
+        {onCollapse && (
+          <button
+            className="btn btn-mini pane-collapse"
+            onClick={onCollapse}
+            title="Collapse agenda pane"
+            aria-label="Collapse agenda pane"
+          >
+            «
+          </button>
+        )}
       </div>
 
       <div className="priority-bar">

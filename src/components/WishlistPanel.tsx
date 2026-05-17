@@ -19,7 +19,12 @@ interface Props {
   onExport: () => void;
   onImport: (file: File) => void;
   onClear: () => void;
-  onCollapse: () => void;
+  /**
+   * Collapse the wishlist pane to a rail. Omitted when the wishlist is the
+   * only expanded pane, which hides the collapse control so one pane stays
+   * open.
+   */
+  onCollapse?: () => void;
   /** Count of wishlisted events whose metadata is currently unresolvable. */
   missingCount: number;
   /** True while a recovery fetch is in flight. */
@@ -91,14 +96,16 @@ export function WishlistPanel({
   return (
     <section className="pane pane-wishlist">
       <div className="pane-head">
-        <button
-          className="btn btn-mini pane-collapse"
-          onClick={onCollapse}
-          title="Collapse wishlist pane"
-          aria-label="Collapse wishlist pane"
-        >
-          »
-        </button>
+        {onCollapse && (
+          <button
+            className="btn btn-mini pane-collapse"
+            onClick={onCollapse}
+            title="Collapse wishlist pane"
+            aria-label="Collapse wishlist pane"
+          >
+            »
+          </button>
+        )}
         <h2>Wishlist</h2>
         <span className="count">
           {entries.length} / {WISHLIST_CAP} · {fmtCost(totalCost)} expected

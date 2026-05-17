@@ -77,6 +77,7 @@ export default function App() {
     b: 300,
   });
   const [searchCollapsed, setSearchCollapsed] = useState(false);
+  const [agendaCollapsed, setAgendaCollapsed] = useState(false);
   const [wishlistCollapsed, setWishlistCollapsed] = useState(false);
 
   // Load every cached collection from the GenCon proxy on startup.
@@ -424,6 +425,15 @@ export default function App() {
     (e) => fullResult.get(e.eventId)?.status === 'bumped',
   ).length;
 
+  // Any pane can collapse to a rail, but at least one must stay expanded.
+  // A pane only gets a collapse control when it is not the last one open —
+  // so the final expanded pane simply has no way to be collapsed.
+  const expandedCount =
+    (searchCollapsed ? 0 : 1) +
+    (agendaCollapsed ? 0 : 1) +
+    (wishlistCollapsed ? 0 : 1);
+  const canCollapseMore = expandedCount > 1;
+
   return (
     <div className="app">
       <header className="topbar">
@@ -472,6 +482,9 @@ export default function App() {
             />
           ) : (
             <EventBrowser
+              onCollapse={
+                canCollapseMore ? () => setSearchCollapsed(true) : undefined
+              }
               events={events}
               rankById={rankById}
               wishlistIds={wishlistIds}
@@ -487,28 +500,38 @@ export default function App() {
               onSelect={setSelectedId}
               onMatchIds={setActiveMatchIds}
               onClearSlotSearch={() => setSlotSearch(null)}
-              onCollapse={() => setSearchCollapsed(true)}
               onLoadCollection={loadCollection}
               onRefreshCollection={refreshCollection}
               onRefreshCatalogs={refreshCatalogs}
             />
           )}
-          <AgendaView
-            entries={wishlist.entries}
-            eventsById={eventsById}
-            layers={agendaLayers}
-            wishlistLength={wishlist.entries.length}
-            hiddenIds={hiddenIds}
-            rankById={rankById}
-            priorityFilter={priorityFilter}
-            slotSearch={slotSearch}
-            onPriorityFilter={setPriorityFilter}
-            onClearHidden={clearHidden}
-            onSelect={setSelectedId}
-            onSlotSearch={setSlotSearch}
-            onUncollapseSearch={() => setSearchCollapsed(false)}
-            onToggleHidden={toggleHidden}
-          />
+          {agendaCollapsed ? (
+            <CollapsedRail
+              label="Agenda"
+              side="center"
+              onExpand={() => setAgendaCollapsed(false)}
+            />
+          ) : (
+            <AgendaView
+              entries={wishlist.entries}
+              eventsById={eventsById}
+              layers={agendaLayers}
+              wishlistLength={wishlist.entries.length}
+              hiddenIds={hiddenIds}
+              rankById={rankById}
+              priorityFilter={priorityFilter}
+              slotSearch={slotSearch}
+              onPriorityFilter={setPriorityFilter}
+              onClearHidden={clearHidden}
+              onSelect={setSelectedId}
+              onSlotSearch={setSlotSearch}
+              onUncollapseSearch={() => setSearchCollapsed(false)}
+              onToggleHidden={toggleHidden}
+              onCollapse={
+                canCollapseMore ? () => setAgendaCollapsed(true) : undefined
+              }
+            />
+          )}
           {wishlistCollapsed ? (
             <CollapsedRail
               label="Wishlist"
@@ -517,6 +540,9 @@ export default function App() {
             />
           ) : (
             <WishlistPanel
+              onCollapse={
+                canCollapseMore ? () => setWishlistCollapsed(true) : undefined
+              }
               wishlist={wishlist}
               eventsById={eventsById}
               fullResult={fullResult}
@@ -531,7 +557,6 @@ export default function App() {
               onExport={() => exportWishlist(wishlist)}
               onImport={handleImport}
               onClear={clearWishlist}
-              onCollapse={() => setWishlistCollapsed(true)}
               missingCount={missingWishlistIds.size}
               recovering={recovering}
               onRecover={recoverMissingEvents}
