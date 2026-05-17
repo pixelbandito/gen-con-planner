@@ -281,10 +281,25 @@ export function EventBrowser({
     if (searchQuery !== '') onLoadCollection('search', searchQuery);
   }
 
+  // The filters + "Manage cached events" sections live inside the scroll
+  // region so they scroll off as the user browses results. The "Filters"
+  // button in the sticky bar scrolls the region back to the top to bring
+  // them into view again.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  function showFilters() {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   return (
     <section className="pane pane-browser">
-      <div className="pane-head">
-        <h2>Browse events</h2>
+      <div className="pane-head search-bar">
+        <button
+          className="btn btn-mini filters-toggle"
+          onClick={showFilters}
+          title="Scroll back to the filter controls"
+        >
+          Filters
+        </button>
         <span className="count">
           {filtered.length} match{filtered.length === 1 ? '' : 'es'}
         </span>
@@ -298,6 +313,7 @@ export function EventBrowser({
         </button>
       </div>
 
+      <div className="search-scroll" ref={scrollRef}>
       <div className="filters">
         <div className="text-search">
           <input
@@ -496,6 +512,7 @@ export function EventBrowser({
         {filtered.length === 0 && (
           <div className="list-note">No events match these filters.</div>
         )}
+      </div>
       </div>
     </section>
   );

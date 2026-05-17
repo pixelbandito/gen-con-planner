@@ -95,6 +95,29 @@ code {
 .pane-head h2 { font-size: 14px; }
 .count { font-size: 12px; color: var(--ink-soft); }
 
+/* ---- search pane: slim sticky bar + single scroll region ---- */
+/* The bar stays pinned; the filters and "Manage cached events" sections
+   live inside .search-scroll so they scroll off as results are browsed. */
+.search-bar {
+  gap: 10px;
+  padding: 7px 14px;
+}
+.search-bar .count { margin-right: auto; }
+.filters-toggle {
+  flex: none;
+  font-weight: 600;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.filters-toggle:hover { background: color-mix(in srgb, var(--accent) 10%, #fff); }
+.search-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 /* collapse button in a side pane's header */
 .pane-collapse {
   flex: none;
@@ -139,6 +162,9 @@ code {
   border-bottom: 1px solid var(--line);
   flex: none;
 }
+/* Filters live inside the scroll region, so the SearchableSelect dropdown
+   must overlay the results below it rather than be clipped. */
+.search-scroll .filters { position: relative; z-index: 2; }
 .filters input[type="search"],
 .filters input[type="number"],
 .filters select {
@@ -386,7 +412,9 @@ code {
 }
 
 /* ---- event list ---- */
-.event-list { overflow-y: auto; flex: 1; }
+/* Scrolling is owned by the parent .search-scroll; this block just grows to
+   fill leftover space so a short result set still pushes the pane bottom. */
+.event-list { flex: 1; }
 .event-row {
   display: flex;
   align-items: stretch;
