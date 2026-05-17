@@ -117,22 +117,22 @@ export function EventBrowser({
     [categoryCatalog, collections],
   );
 
-  // Options for the searchable game-system picker. Preserves the loaded-✓
-  // marker and event count in the label so they stay visible and searchable.
+  // Options for the searchable game-system picker. The label is just the
+  // system name plus its event count; what's cached is shown in the
+  // "Manage cached events" section instead.
   const systemSelectOptions = useMemo<SearchableSelectOption[]>(() => {
     const opts: SearchableSelectOption[] = [
       { value: '', label: 'All game systems' },
     ];
     for (const s of systemOptions) {
-      const loaded = collections.has(collectionKey('game', s.name));
       const count = s.eventCount > 0 ? ` (${s.eventCount})` : '';
       opts.push({
         value: s.name,
-        label: `${loaded ? '✓ ' : ''}${s.name}${count}`,
+        label: `${s.name}${count}`,
       });
     }
     return opts;
-  }, [systemOptions, collections]);
+  }, [systemOptions]);
 
   // Loaded collections (game, category, and search kinds), sorted, for the
   // cache-management section.
@@ -338,11 +338,10 @@ export function EventBrowser({
         >
           <option value="">All event types</option>
           {categoryOptions.map((t) => {
-            const loaded = collections.has(collectionKey('category', t.name));
             const count = t.eventCount > 0 ? ` (${t.eventCount})` : '';
             return (
               <option key={t.name} value={t.name}>
-                {loaded ? '✓ ' : ''}{t.name}{count}
+                {t.name}{count}
               </option>
             );
           })}
@@ -389,7 +388,7 @@ export function EventBrowser({
           aria-expanded={manageOpen}
         >
           <span className="manage-caret">{manageOpen ? '▾' : '▸'}</span>
-          Loaded data ({loadedCollections.length})
+          Manage cached events ({loadedCollections.length})
         </button>
         {manageOpen && (
           <div className="manage-body">

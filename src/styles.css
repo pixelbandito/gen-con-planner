@@ -254,6 +254,9 @@ code {
 }
 
 /* ---- manage-data section ---- */
+/* A quiet, collapsible appendix to the filter panel — not a results header.
+   It shares the filter panel's bottom border and stays visually subordinate
+   to the filter controls above it. */
 .manage-data {
   border-bottom: 1px solid var(--line);
   flex: none;
@@ -261,25 +264,25 @@ code {
 .manage-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   width: 100%;
-  padding: 8px 14px;
+  padding: 5px 14px;
   font: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--ink-soft);
-  background: #f7f8fa;
+  background: none;
   border: none;
   cursor: pointer;
   text-align: left;
 }
-.manage-toggle:hover { background: #eef0f4; }
-.manage-caret { font-size: 10px; }
+.manage-toggle:hover { color: var(--ink); }
+.manage-caret { font-size: 9px; }
 .manage-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 4px 14px 10px;
 }
 /* ---- loaded-data cache list ---- */
 .cache-list {
