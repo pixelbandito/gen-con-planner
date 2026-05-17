@@ -46,7 +46,16 @@ launch macOS Gatekeeper blocks it. To open it once: try to open the app, then
 go to **System Settings → Privacy & Security**, scroll to the Security section
 where it names the blocked app, and click **"Open Anyway"** (re-confirm, and
 enter an admin password if asked). After that first time it opens normally.
-Windows shows a SmartScreen warning — click **"More info" → "Run anyway."**
+
+Windows and Linux installers are not cross-built from macOS — they are produced
+by the **`desktop-build` GitHub Actions workflow**, a matrix build on native
+macOS/Windows/Linux runners. Download the installer for your OS from the
+workflow run's **Artifacts**. Notes for those builds:
+
+- **Windows** (`.exe`): unsigned, so SmartScreen shows a warning — click
+  **"More info" → "Run anyway."**
+- **Linux** (`.AppImage`): make it executable (`chmod +x Gen-Con-Planner-*.AppImage`)
+  then run it directly.
 
 ## Event data
 
