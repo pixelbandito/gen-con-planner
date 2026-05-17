@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "scrape": "node scripts/scrape.mjs",
-    "bundle": "node scripts/bundle.mjs"
+    "bundle": "node scripts/bundle.mjs",
+    "build:desktop": "VITE_BASE=/ vite build",
+    "electron:dev": "npm run build:desktop && electron electron/main.cjs"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -21,6 +24,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^42.1.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"

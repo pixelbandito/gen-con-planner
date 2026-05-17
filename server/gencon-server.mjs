@@ -7,7 +7,7 @@
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, join, normalize, sep } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { createGenconHandler } from './gencon-routes.mjs';
 
 /** Minimal extension → Content-Type map for the built SPA's assets. */
@@ -40,7 +40,14 @@ function resolveStaticPath(staticDir, pathname) {
   // climbs above the root starts with '..' or is exactly '..'.
   const rel = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '');
   if (rel === '..' || rel.startsWith(`..${sep}`)) return null;
-  return join(staticDir, rel);
+  // Explicit containment check on the fully-resolved path: accept only the
+  // staticDir itself or paths beneath it (rather than trusting normalize()
+  // evaluation order alone). Symlinks *inside* staticDir are trusted — that
+  // directory is the app's own build output.
+  const root = resolve(staticDir);
+  const resolved = resolve(root, rel);
+  if (resolved !== root && !resolved.startsWith(root + sep)) return null;
+  return resolved;
 }
 
 /** Serve a static file (SPA fallback to index.html for unknown paths). */
@@ -91,13 +98,22 @@ async function serveStatic(staticDir, req, res) {
  * Start the standalone GenCon HTTP server.
  *
  * @param {object} opts
- * @param {number} opts.port       Port to listen on.
+ * @param {number} opts.port       Port to listen on (0 = an OS-assigned port).
+ * @param {string} [opts.host]     Interface to bind to; defaults to loopback
+ *                                 ('127.0.0.1') so the server is never exposed
+ *                                 beyond the local machine.
  * @param {string} opts.cacheDir   Root of the writable on-disk cache.
  * @param {string} opts.bundlePath Read-only seed file (the bundled events.json).
  * @param {string} opts.staticDir  Directory of the built SPA to serve.
  * @returns {import('node:http').Server} the listening server.
  */
-export function startGenconServer({ port, cacheDir, bundlePath, staticDir }) {
+export function startGenconServer({
+  port,
+  host = '127.0.0.1',
+  cacheDir,
+  bundlePath,
+  staticDir,
+}) {
   const apiHandler = createGenconHandler({ cacheDir, bundlePath });
   const server = createServer((req, res) => {
     if (req.url && req.url.startsWith('/api/gencon/')) {
@@ -111,6 +127,6 @@ export function startGenconServer({ port, cacheDir, bundlePath, staticDir }) {
       res.end(err?.message ?? String(err));
     });
   });
-  server.listen(port);
+  server.listen(port, host);
   return server;
 }

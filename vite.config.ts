@@ -8,7 +8,11 @@ export default defineConfig({
   // lives under a repo-name subpath on GitHub Pages. Asset URLs and the
   // offline-bundle fetch (import.meta.env.BASE_URL) resolve under this prefix.
   // Local dev/preview therefore also serve under /gen-con-planner/.
-  base: '/gen-con-planner/',
+  //
+  // The desktop (Electron) build instead serves the SPA from the root of a
+  // localhost origin, so it needs base '/'. `build:desktop` sets VITE_BASE=/
+  // for that case; everything else (dev, build, preview) keeps the default.
+  base: process.env.VITE_BASE ?? '/gen-con-planner/',
   plugins: [react(), genconProxy()],
   // Preferred port, clear of Vite's default 5173 cluster. strictPort is off,
   // so Vite falls back to the next free port if 5757/5758 is taken.
