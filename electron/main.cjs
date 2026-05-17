@@ -13,17 +13,18 @@
 // (server/gencon-server.mjs) and is loaded below via a dynamic import().
 
 const path = require('node:path');
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, dialog } = require('electron');
 
-// Fixed loopback port for the embedded server. A fixed port is fine for a
-// single-user desktop app; if it is ever taken, switch `PORT` to 0 to let the
-// OS assign a free port (the code already reads the actual port back from
-// `server.address()`).
-const PORT = 5759;
+// Port 0 asks the OS for a free loopback port; the actual assigned port is read
+// back from `server.address()` after `listening`. This avoids the
+// port-collision failure mode a fixed port would have on a busy machine.
+const PORT = 0;
 const HOST = '127.0.0.1';
 
 /** The running HTTP server (proxy + static SPA), or null before startup. */
 let httpServer = null;
+/** The actual OS-assigned port the embedded server is listening on. */
+let serverPort = null;
 /** The main application window, or null when none is open. */
 let mainWindow = null;
 
@@ -80,9 +81,12 @@ async function startServer() {
   });
 
   const addr = server.address();
-  const actualPort = typeof addr === 'object' && addr ? addr.port : PORT;
+  serverPort = typeof addr === 'object' && addr ? addr.port : null;
+  if (serverPort === null) {
+    throw new Error('embedded server started but reported no address/port');
+  }
   console.log(
-    `[gencon] embedded server listening on http://${HOST}:${actualPort}/`,
+    `[gencon] embedded server listening on http://${HOST}:${serverPort}/`,
   );
   console.log(`[gencon] cacheDir=${cacheDir}`);
   console.log(`[gencon] bundlePath=${bundlePath}`);
@@ -92,8 +96,8 @@ async function startServer() {
 
 /** Create the main application window and load the embedded SPA. */
 function createWindow() {
-  const addr = httpServer && httpServer.address();
-  const port = typeof addr === 'object' && addr ? addr.port : PORT;
+  // serverPort is set by startServer() before this is ever called.
+  const appOrigin = `http://${HOST}:${serverPort}`;
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -107,7 +111,19 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL(`http://${HOST}:${port}/`);
+  const { webContents } = mainWindow;
+
+  // Defense-in-depth: the renderer is trusted local content, but block any
+  // attempt to open new windows or navigate away from the embedded origin
+  // (e.g. an injected link), so the app can never become a generic browser.
+  webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(`${appOrigin}/`) && url !== appOrigin) {
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.loadURL(`${appOrigin}/`);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -130,6 +146,13 @@ app.whenReady().then(async () => {
     httpServer = await startServer();
   } catch (err) {
     console.error('[gencon] failed to start embedded server:', err);
+    // Surface the failure so a packaged-app crash is diagnosable rather than a
+    // silent quit (the user has no console).
+    dialog.showErrorBox(
+      'Gen Con Planner could not start',
+      'The app could not start its local data service and will now quit.\n\n' +
+        `Details: ${err && err.message ? err.message : String(err)}`,
+    );
     app.quit();
     return;
   }
