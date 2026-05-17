@@ -1,7 +1,7 @@
 {
   "name": "gen-con-planner",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Plan a Gen Con schedule: browse events, build a ranked wishlist, and visualize conflicts.",
   "author": "pixelbandito",
   "type": "module",
@@ -23,7 +23,8 @@
     "dist": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
     "dist:mac": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
     "dist:win": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never",
-    "dist:linux": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --linux --publish never"
+    "dist:linux": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --linux --publish never",
+    "dist:release": "npm run build:desktop && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish always"
   },
   "build": {
     "appId": "com.pixelbandito.gen-con-planner",
